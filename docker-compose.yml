@@ -1,0 +1,25 @@
+version: "3.8"
+
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    ports:
+      - "3333:3000"
+    volumes:
+      - ./src:/app/src
+    environment:
+      - NEXT_PUBLIC_THEME=dark
+      # MAIN FIX: Directs the frontend (port 3000) to the backend service (port 8000)
+      - NEXT_PUBLIC_API_BASE_URL=http://backend:8000
+      # NEW FIX: Also sets the RAG API base URL, assuming RAG is also served by the same 'backend' service
+      - NEXT_PUBLIC_RAG_API_BASE_URL=http://backend:8000
+    restart: unless-stopped
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    ports:
+      - "8000:8000"
+    restart: unless-stopped

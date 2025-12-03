@@ -1,0 +1,59 @@
+# backend Dockerfile - optimized for large ML deps
+FROM python:3.11 AS builder
+
+WORKDIR /app
+
+# Install system build deps required by many Python packages
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    git \
+    wget \
+    ffmpeg \
+    libsndfile1 \
+    libgl1 \
+    libglib2.0-0 \
+    libffi-dev \
+    libssl-dev \
+    python3-dev \
+    cmake \
+  && rm -rf /var/lib/apt/lists/*
+
+# Copy only requirements first so pip layer can be cached
+COPY requirements-docker.txt ./requirements-docker.txt
+
+# Ensure pip, wheel and setuptools are up-to-date, allow wheel caching
+RUN pip install --upgrade pip setuptools wheel
+
+# Install Python deps (do NOT use --no-cache-dir so wheels can be cached between builds)
+RUN pip install -r requirements-docker.txt
+
+# Copy application sources
+COPY . .
+
+# (Optional) run any build steps here (migrations, compile, etc.)
+# e.g. RUN python -m pip install -e .
+
+# Final minimal runtime image
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install runtime system deps (smaller set)
+RUN apt-get update && apt-get install -y \
+    libsndfile1 \
+    ffmpeg \
+    libgl1 \
+    libglib2.0-0 \
+  && rm -rf /var/lib/apt/lists/*
+
+# Copy installed packages from builder
+COPY --from=builder /usr/local /usr/local
+COPY --from=builder /app /app
+
+ENV PYTHONUNBUFFERED=1
+
+# Expose backend port (adjust if your app uses a different port)
+EXPOSE 8000
+
+# Default command (change if your app uses uvicorn/gunicorn differently)
+CMD ["python", "run_server.py"]
