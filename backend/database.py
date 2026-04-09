@@ -30,7 +30,8 @@ class ChatDatabase:
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
                 model_used TEXT NOT NULL,
-                message_count INTEGER DEFAULT 0
+                message_count INTEGER DEFAULT 0,
+                user_id TEXT
             )
         ''')
 
@@ -93,33 +94,75 @@ class ChatDatabase:
             )
         ''')
 
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS user_preferences (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                key TEXT UNIQUE NOT NULL,
+                value TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+        ''')
+
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS users (
+                id TEXT PRIMARY KEY,
+                username TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                email TEXT,
+                created_at TEXT NOT NULL,
+                last_login TEXT
+            )
+        ''')
+
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS api_keys (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id TEXT NOT NULL,
+                api_key TEXT UNIQUE NOT NULL,
+                created_at TEXT NOT NULL,
+                expires_at TEXT,
+                FOREIGN KEY(user_id) REFERENCES users(id)
+            )
+        ''')
+
         conn.commit()
         conn.close()
-        print("Database initialized successfully")
+        print("✅ Database initialized successfully")
 
-    def create_session(self, title: str, model: str) -> str:
+    def create_session(self, title: str, model: str, user_id: str = None) -> str:
         session_id = str(uuid.uuid4())
         now = datetime.now().isoformat()
 
         conn = sqlite3.connect(self.db_path)
         conn.execute('''
-            INSERT INTO sessions (id, title, created_at, updated_at, model_used)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (session_id, title, now, now, model))
+            INSERT INTO sessions (id, title, created_at, updated_at, model_used, user_id)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (session_id, title, now, now, model, user_id))
         conn.commit()
         conn.close()
 
         return session_id
 
-    def get_sessions(self, limit: int = 50) -> List[Dict]:
+    def get_sessions(self, limit: int = 50, user_id: str = None) -> List[Dict]:
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
-        cursor = conn.execute('''
-            SELECT id, title, created_at, updated_at, model_used, message_count
-            FROM sessions
-            ORDER BY updated_at DESC
-            LIMIT ?
-        ''', (limit,))
+        
+        if user_id:
+            cursor = conn.execute('''
+                SELECT id, title, created_at, updated_at, model_used, message_count, user_id
+                FROM sessions
+                WHERE user_id = ?
+                ORDER BY updated_at DESC
+                LIMIT ?
+            ''', (user_id, limit))
+        else:
+            cursor = conn.execute('''
+                SELECT id, title, created_at, updated_at, model_used, message_count, user_id
+                FROM sessions
+                ORDER BY updated_at DESC
+                LIMIT ?
+            ''', (limit,))
+        
         sessions = [dict(row) for row in cursor.fetchall()]
         conn.close()
         return sessions
@@ -136,7 +179,29 @@ class ChatDatabase:
         conn.close()
         return dict(row) if row else None
 
-    def add_message(self, session_id: str, content: str, sender: str, metadata: Dict = None) -> str:
+    def delete_session(self, session_id: str) -> bool:
+        """Delete a session and all its messages"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            conn.execute('DELETE FROM messages WHERE session_id = ?', (session_id,))
+            conn.execute('DELETE FROM sessions WHERE id = ?', (session_id,))
+            conn.commit()
+            conn.close()
+            return True
+        except Exception as e:
+            print(f"[ERROR] Could not delete session: {e}")
+            return False
+
+    # ✅ FIXED: Match server.py call signature
+    def add_message(self, session_id: str, sender: str, content: str, metadata: Dict = None) -> str:
+        """
+        Add message to session
+        Args:
+            session_id: Session ID
+            sender: 'user' or 'assistant'
+            content: Message text
+            metadata: Optional metadata dict
+        """
         message_id = str(uuid.uuid4())
         now = datetime.now().isoformat()
         metadata_json = json.dumps(metadata or {})
@@ -160,6 +225,7 @@ class ChatDatabase:
         return message_id
 
     def get_messages(self, session_id: str, limit: int = 100) -> List[Dict]:
+        """Get all messages for a session in chronological order"""
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
         cursor = conn.execute('''
@@ -173,20 +239,51 @@ class ChatDatabase:
         messages = []
         for row in cursor.fetchall():
             message = dict(row)
-            message["metadata"] = json.loads(message["metadata"])
-            messages.append(message)
+            try:
+                message["metadata"] = json.loads(message["metadata"])
+            except:
+                message["metadata"] = {}
+            
+            # Return in format server.py expects
+            messages.append({
+                "role": message["sender"],
+                "content": message["content"],
+                "timestamp": message["timestamp"],
+                "id": message["id"]
+            })
 
         conn.close()
         return messages
 
     def get_conversation_history(self, session_id: str) -> List[Dict]:
+        """Get conversation in OpenAI format"""
         messages = self.get_messages(session_id)
-        return [{"role": msg["sender"], "content": msg["content"]} for msg in messages]
+        return [{"role": msg["role"], "content": msg["content"]} for msg in messages]
 
-    # -------------------------------
-    # ✅ THE MISSING FUNCTION (FIX)
-    # -------------------------------
+    def get_documents_for_session(self, session_id: str) -> List[str]:
+        """Get document paths for a session"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.execute('''
+            SELECT file_path FROM session_documents WHERE session_id = ?
+        ''', (session_id,))
+        paths = [row[0] for row in cursor.fetchall()]
+        conn.close()
+        return paths
+
+
+    def update_session_title(self, session_id: str, title: str) -> bool:
+        """Update session title"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            conn.execute("UPDATE sessions SET title=? WHERE id=?", (title, session_id))
+            conn.commit()
+            conn.close()
+            return True
+        except Exception as e:
+            print(f"[ERROR] update_session_title: {e}")
+            return False
     def cleanup_empty_sessions(self) -> int:
+        """Remove sessions with no messages"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.execute('''
             SELECT s.id FROM sessions s
@@ -205,10 +302,8 @@ class ChatDatabase:
         conn.close()
         return deleted
 
-    # -------------------------------
-    # REQUIRED BY backend/server.py
-    # -------------------------------
     def get_stats(self) -> Dict:
+        """Get database statistics"""
         conn = sqlite3.connect(self.db_path)
 
         session_count = conn.execute('SELECT COUNT(*) FROM sessions').fetchone()[0]
@@ -230,8 +325,131 @@ class ChatDatabase:
             "most_used_model": row[0] if row else None
         }
 
+    # ==============================
+    # USER PREFERENCES
+    # ==============================
+    def set_preference(self, key: str, value: str) -> bool:
+        """Store user preference"""
+        try:
+            now = datetime.now().isoformat()
+            conn = sqlite3.connect(self.db_path)
+            conn.execute('''
+                INSERT INTO user_preferences (key, value, updated_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(key) DO UPDATE SET value=?, updated_at=?
+            ''', (key, value, now, value, now))
+            conn.commit()
+            conn.close()
+            return True
+        except Exception as e:
+            print(f"[ERROR] set_preference: {e}")
+            return False
 
-def generate_session_title(first_message: str, max_length: int = 50) -> str:
+    def get_preference(self, key: str, default=None):
+        """Get user preference"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.execute('SELECT value FROM user_preferences WHERE key = ?', (key,))
+            row = cursor.fetchone()
+            conn.close()
+            return row[0] if row else default
+        except Exception as e:
+            print(f"[ERROR] get_preference: {e}")
+            return default
+
+    def get_all_preferences(self) -> Dict:
+        """Get all user preferences"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute('SELECT key, value FROM user_preferences')
+            prefs = {row['key']: row['value'] for row in cursor.fetchall()}
+            conn.close()
+            return prefs
+        except Exception as e:
+            print(f"[ERROR] get_all_preferences: {e}")
+            return {}
+
+    # ==============================
+    # USER AUTHENTICATION
+    # ==============================
+    def create_user(self, username: str, password: str, email: str = None) -> str:
+        """Create new user with hashed password"""
+        import hashlib
+        user_id = str(uuid.uuid4())
+        password_hash = hashlib.sha256(password.encode()).hexdigest()
+        now = datetime.now().isoformat()
+        
+        try:
+            conn = sqlite3.connect(self.db_path)
+            conn.execute('''
+                INSERT INTO users (id, username, password_hash, email, created_at)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (user_id, username, password_hash, email, now))
+            conn.commit()
+            conn.close()
+            return user_id
+        except Exception as e:
+            print(f"[ERROR] create_user: {e}")
+            return None
+
+    def verify_user(self, username: str, password: str) -> Optional[str]:
+        """Verify user credentials, return user_id if valid"""
+        import hashlib
+        password_hash = hashlib.sha256(password.encode()).hexdigest()
+        
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.execute('''
+                SELECT id FROM users 
+                WHERE username = ? AND password_hash = ?
+            ''', (username, password_hash))
+            row = cursor.fetchone()
+            conn.close()
+            return row[0] if row else None
+        except Exception as e:
+            print(f"[ERROR] verify_user: {e}")
+            return None
+
+    def create_api_key(self, user_id: str) -> str:
+        """Generate API key for user"""
+        import secrets
+        api_key = f"lgpt_{secrets.token_urlsafe(32)}"
+        now = datetime.now().isoformat()
+        
+        try:
+            conn = sqlite3.connect(self.db_path)
+            conn.execute('''
+                INSERT INTO api_keys (user_id, api_key, created_at)
+                VALUES (?, ?, ?)
+            ''', (user_id, api_key, now))
+            conn.commit()
+            conn.close()
+            return api_key
+        except Exception as e:
+            print(f"[ERROR] create_api_key: {e}")
+            return None
+
+    def verify_api_key(self, api_key: str) -> Optional[str]:
+        """Verify API key, return user_id if valid"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.execute('''
+                SELECT user_id FROM api_keys WHERE api_key = ?
+            ''', (api_key,))
+            row = cursor.fetchone()
+            conn.close()
+            return row[0] if row else None
+        except Exception as e:
+            print(f"[ERROR] verify_api_key: {e}")
+            return None
+
+
+def generate_session_title(first_message: str = "", max_length: int = 50) -> str:
+    """Generate a session title from first message"""
+    if not first_message:
+        return f"Chat {datetime.now().strftime('%H:%M')}"
+    
     title = first_message.strip()
     prefixes = ["hey", "hi", "hello", "can you", "please", "i want", "i need"]
 
@@ -253,14 +471,15 @@ def generate_session_title(first_message: str, max_length: int = 50) -> str:
     return title
 
 
+# Create global instance
 db = ChatDatabase()
 
 if __name__ == "__main__":
     print("🧪 Testing DB...")
 
-    session_id = db.create_session("Test Chat", "qwen3:8b")
-    db.add_message(session_id, "Hello!", "user")
-    db.add_message(session_id, "Hi!", "assistant")
+    session_id = db.create_session("Test Chat", "qwen2.5:7b-instruct-q4_K_M")
+    db.add_message(session_id, "user", "Hello!")
+    db.add_message(session_id, "assistant", "Hi!")
 
     print(db.get_messages(session_id))
     print(db.get_stats())

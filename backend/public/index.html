@@ -4,25 +4,269 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>LocalGPT</title>
-</head>
-<body>
-<h1>LocalGPT Chat</h1>
-<textarea id="message" placeholder="Type your message"></textarea>
-<button onclick="sendMessage()">Send</button>
-<pre id="response"></pre>
-
-<script>
-async function sendMessage() {
-    const msg = document.getElementById('message').value;
-    if (!msg) return;
-    const res = await fetch('/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: msg })
-    });
-    const data = await res.json();
-    document.getElementById('response').textContent = data.response || data.error;
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Sora:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0e1117;--bg2:#161b25;--bg3:#1e2535;--border:rgba(99,130,255,0.15);--border2:rgba(99,130,255,0.3);--accent:#6382ff;--accent2:#a78bfa;--text:#e2e8f0;--text2:#94a3b8;--text3:#4a5568;--user-bubble:#1e3a5f;--user-border:rgba(99,130,255,0.4);--bot-bubble:#161b25;--bot-border:rgba(99,130,255,0.15);--danger:#ff5470;--success:#34d399}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:"Sora",sans-serif;min-height:100vh}
+.auth-screen{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px}
+.auth-card{background:var(--bg2);border:1px solid var(--border2);border-radius:20px;padding:40px;width:100%;max-width:420px}
+.auth-logo{display:flex;align-items:center;gap:12px;margin-bottom:32px;justify-content:center}
+.auth-logo-icon{width:48px;height:48px;border-radius:12px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-size:24px}
+.auth-logo-text{font-size:22px;font-weight:600;letter-spacing:-0.03em}
+.auth-tabs{display:flex;gap:0;margin-bottom:28px;background:var(--bg3);border-radius:10px;padding:4px}
+.auth-tab{flex:1;padding:9px;text-align:center;border-radius:8px;cursor:pointer;font-size:14px;font-weight:500;color:var(--text2);transition:all 0.2s;border:none;background:transparent;font-family:"Sora",sans-serif}
+.auth-tab.active{background:var(--bg2);color:var(--text);box-shadow:0 1px 4px rgba(0,0,0,0.3)}
+.auth-field{margin-bottom:16px}
+.auth-field label{display:block;font-size:12px;color:var(--text2);margin-bottom:6px;font-family:"IBM Plex Mono",monospace;letter-spacing:0.05em}
+.auth-field input{width:100%;background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:12px 14px;font-size:14px;font-family:"Sora",sans-serif;transition:border-color 0.2s;outline:none}
+.auth-field input:focus{border-color:var(--accent)}
+.auth-field input::placeholder{color:var(--text3)}
+.auth-btn{width:100%;padding:13px;background:var(--accent);color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:500;font-family:"Sora",sans-serif;cursor:pointer;transition:all 0.2s;margin-top:8px}
+.auth-btn:hover{background:var(--accent2)}
+.auth-btn:disabled{opacity:0.5;cursor:not-allowed}
+.auth-error{background:rgba(255,84,112,0.1);border:1px solid rgba(255,84,112,0.3);border-radius:8px;padding:10px 14px;font-size:13px;color:var(--danger);margin-bottom:16px;display:none}
+.auth-error.show{display:block}
+.auth-footer{text-align:center;margin-top:20px;font-size:12px;color:var(--text3);font-family:"IBM Plex Mono",monospace}
+.app-screen{display:none;height:100vh;overflow:hidden;flex-direction:row}
+.app-screen.show{display:flex}
+.sidebar{width:270px;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0}
+.sidebar-top{padding:18px 16px 14px;border-bottom:1px solid var(--border)}
+.app-brand{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.brand-icon{width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-size:16px}
+.brand-name{font-size:15px;font-weight:600;letter-spacing:-0.02em}
+.brand-sub{font-size:10px;color:var(--text2);font-family:"IBM Plex Mono",monospace}
+.user-pill{display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--bg3);border-radius:8px;margin-bottom:12px;border:1px solid var(--border)}
+.user-avatar{width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex-shrink:0}
+.user-email{font-size:12px;color:var(--text2);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:"IBM Plex Mono",monospace}
+.logout-btn{font-size:11px;color:var(--danger);cursor:pointer;padding:3px 7px;border-radius:5px;border:1px solid rgba(255,84,112,0.2);background:transparent;font-family:"Sora",sans-serif}
+.logout-btn:hover{background:rgba(255,84,112,0.1)}
+.new-chat-btn{width:100%;padding:10px;background:transparent;color:var(--text);border:1px solid var(--border2);border-radius:8px;cursor:pointer;font-weight:500;font-size:13px;font-family:"Sora",sans-serif;transition:all 0.2s;display:flex;align-items:center;justify-content:center;gap:8px}
+.new-chat-btn:hover{background:rgba(99,130,255,0.1);border-color:var(--accent);color:var(--accent)}
+.sidebar-section{padding:10px 16px 6px;font-size:10px;font-family:"IBM Plex Mono",monospace;color:var(--text3);letter-spacing:0.08em;text-transform:uppercase}
+.sessions-list{flex:1;overflow-y:auto;padding:6px 8px}
+.sessions-list::-webkit-scrollbar{width:4px}
+.sessions-list::-webkit-scrollbar-thumb{background:var(--bg3);border-radius:4px}
+.session-item{padding:9px 10px;margin:2px 0;border-radius:7px;cursor:pointer;transition:all 0.15s;display:flex;justify-content:space-between;align-items:center;border:1px solid transparent}
+.session-item:hover{background:var(--bg3);border-color:var(--border)}
+.session-item.active{background:rgba(99,130,255,0.1);border-color:var(--border2)}
+.session-title{flex:1;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text2)}
+.session-item.active .session-title{color:var(--text)}
+.delete-session{color:var(--text3);cursor:pointer;padding:2px 6px;font-size:16px;opacity:0;transition:all 0.15s}
+.session-item:hover .delete-session{opacity:1}
+.delete-session:hover{color:var(--danger)}
+.sidebar-footer{padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px}
+.footer-btn{flex:1;padding:8px;background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--text2);font-size:12px;font-family:"Sora",sans-serif;cursor:pointer;transition:all 0.15s;display:flex;align-items:center;justify-content:center;gap:5px}
+.footer-btn:hover{background:var(--bg3);color:var(--text)}
+.footer-btn.danger:hover{background:rgba(255,84,112,0.1);color:var(--danger)}
+.main-content{flex:1;display:flex;flex-direction:column;min-width:0}
+header{background:var(--bg2);border-bottom:1px solid var(--border);padding:14px 24px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0}
+.chat-title{font-size:15px;font-weight:500}
+.chat-subtitle{font-size:11px;color:var(--text3);font-family:"IBM Plex Mono",monospace}
+.status{font-size:11px;color:var(--success);display:flex;align-items:center;gap:6px;font-family:"IBM Plex Mono",monospace}
+.status-dot{width:6px;height:6px;background:var(--success);border-radius:50%;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+.memory-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;background:rgba(99,130,255,0.1);border:1px solid var(--border2);border-radius:20px;font-size:10px;font-family:"IBM Plex Mono",monospace;color:var(--accent)}
+.chat-container{flex:1;overflow-y:auto;padding:28px 24px;display:flex;flex-direction:column;min-height:0}
+.chat-container::-webkit-scrollbar{width:5px}
+.chat-container::-webkit-scrollbar-thumb{background:var(--bg3);border-radius:4px}
+.welcome-screen{margin:auto;text-align:center;max-width:520px;padding:40px 20px}
+.welcome-icon{width:64px;height:64px;border-radius:16px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-size:32px;margin:0 auto 20px}
+.welcome-screen h2{font-size:26px;font-weight:600;margin-bottom:10px;letter-spacing:-0.03em}
+.welcome-screen p{font-size:14px;color:var(--text2);line-height:1.7;margin-bottom:28px}
+.suggestion-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;text-align:left}
+.suggestion-card{padding:12px 14px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;cursor:pointer;transition:all 0.2s;font-size:13px;color:var(--text2);line-height:1.5}
+.suggestion-card:hover{border-color:var(--accent);background:rgba(99,130,255,0.08);color:var(--text)}
+.suggestion-card strong{display:block;font-size:11px;color:var(--accent);margin-bottom:3px;font-family:"IBM Plex Mono",monospace}
+.message{margin-bottom:18px;animation:fadeIn 0.25s ease;display:flex;flex-direction:column}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.message.user{align-items:flex-end}
+.message.bot{align-items:flex-start}
+.msg-label{font-size:10px;font-family:"IBM Plex Mono",monospace;color:var(--text3);margin-bottom:5px;letter-spacing:0.05em}
+.message-bubble{max-width:72%;padding:13px 16px;border-radius:12px;line-height:1.7;font-size:14px}
+.message.user .message-bubble{background:var(--user-bubble);border:1px solid var(--user-border);color:var(--text);border-bottom-right-radius:4px}
+.message.bot .message-bubble{background:var(--bot-bubble);border:1px solid var(--bot-border);color:var(--text);border-bottom-left-radius:4px}
+.message.bot .message-bubble.typing{display:flex;align-items:center;gap:5px;padding:14px 18px}
+.typing-dot{width:7px;height:7px;background:var(--accent);border-radius:50%;animation:bounce 1.2s infinite}
+.typing-dot:nth-child(2){animation-delay:0.15s}
+.typing-dot:nth-child(3){animation-delay:0.3s}
+@keyframes bounce{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-8px)}}
+.error-message{background:rgba(255,84,112,0.1)!important;border-color:rgba(255,84,112,0.3)!important;color:var(--danger)!important}
+.message-bubble pre{background:#0a0d14;padding:12px;border-radius:7px;overflow-x:auto;margin:10px 0;border:1px solid var(--border)}
+.message-bubble code{font-family:"IBM Plex Mono",monospace;font-size:13px}
+.message-bubble p{margin-bottom:8px}
+.message-bubble p:last-child{margin-bottom:0}
+.message-bubble ul,.message-bubble ol{margin:8px 0 8px 20px}
+.input-container{background:var(--bg2);border-top:1px solid var(--border);padding:14px 24px 18px;flex-shrink:0}
+.attachments-preview{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+.attachment-item{padding:6px 10px;background:var(--bg3);border:1px solid var(--border2);border-radius:6px;font-size:12px;display:flex;align-items:center;gap:6px;color:var(--text2);font-family:"IBM Plex Mono",monospace}
+.remove-attachment{color:var(--danger);cursor:pointer}
+.input-row{display:flex;gap:10px;align-items:flex-end}
+.icon-btn{width:40px;height:40px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;cursor:pointer;color:var(--text2);font-size:17px;display:flex;align-items:center;justify-content:center;transition:all 0.15s;flex-shrink:0}
+.icon-btn:hover{border-color:var(--border2);color:var(--text)}
+textarea{flex:1;background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:11px 14px;resize:none;min-height:44px;max-height:140px;font-size:14px;font-family:"Sora",sans-serif;line-height:1.5;transition:border-color 0.2s;outline:none}
+textarea:focus{border-color:var(--accent)}
+textarea::placeholder{color:var(--text3)}
+.send-btn{width:44px;height:44px;padding:0;border-radius:10px;background:var(--accent);color:#fff;border:none;cursor:pointer;font-size:20px;display:flex;align-items:center;justify-content:center;transition:all 0.2s;flex-shrink:0}
+.send-btn:hover{background:var(--accent2);transform:translateY(-1px)}
+.send-btn:disabled{opacity:0.4;cursor:not-allowed;transform:none}
+.input-hint{margin-top:8px;font-size:11px;color:var(--text3);font-family:"IBM Plex Mono",monospace}
+input[type="file"]{display:none}
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:100;align-items:center;justify-content:center}
+.modal-overlay.show{display:flex}
+.modal{background:var(--bg2);border:1px solid var(--border2);border-radius:14px;padding:24px;width:380px;max-width:90vw}
+.modal h3{font-size:16px;margin-bottom:8px}
+.modal p{font-size:13px;color:var(--text2);margin-bottom:20px;line-height:1.6}
+.modal-btns{display:flex;gap:10px;justify-content:flex-end}
+.modal-btn{padding:9px 18px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text2);font-size:13px;font-family:"Sora",sans-serif;cursor:pointer}
+.modal-btn:hover{background:var(--bg3);color:var(--text)}
+.modal-btn.danger{border-color:rgba(255,84,112,0.4);color:var(--danger)}
+.modal-btn.danger:hover{background:rgba(255,84,112,0.1)}
+@media(max-width:768px){
+.sidebar{position:fixed;left:-270px;z-index:50;height:100vh;transition:left 0.3s;box-shadow:4px 0 20px rgba(0,0,0,0.5)}
+.sidebar.open{left:0}
+.message-bubble{max-width:92%}
+.suggestion-grid{grid-template-columns:1fr}
+.hamburger{display:flex!important}
+.chat-container{padding:16px 12px}
+.input-container{padding:10px 12px 14px}
+header{padding:12px 14px}
+.welcome-screen{padding:20px 10px}
+.welcome-screen h2{font-size:20px}
+.overlay{display:block!important}
 }
+@media(min-width:769px){.hamburger{display:none!important}.overlay{display:none!important}}
+</style>
+</head><body>
+<div class="auth-screen" id="authScreen">
+  <div class="auth-card">
+    <div class="auth-logo"><div class="auth-logo-icon">🧠</div><div class="auth-logo-text">LocalGPT</div></div>
+    <div class="auth-tabs">
+      <button class="auth-tab active" onclick="switchTab('login')">Sign in</button>
+      <button class="auth-tab" onclick="switchTab('register')">Create account</button>
+    </div>
+    <div class="auth-error" id="authError"></div>
+    <div class="auth-field"><label>EMAIL ADDRESS</label><input type="email" id="authEmail" placeholder="you@example.com" onkeydown="authKeyPress(event)"></div>
+    <div class="auth-field"><label>PASSWORD</label><input type="password" id="authPassword" placeholder="Min. 6 characters" onkeydown="authKeyPress(event)"></div>
+    <button class="auth-btn" id="authBtn" onclick="submitAuth()">Sign in</button>
+    <div class="auth-footer">Your data stays private · stored on your own server</div>
+  </div>
+</div>
+<div class="app-screen" id="appScreen">
+  <div class="sidebar" id="sidebar">
+    <div class="sidebar-top">
+      <div class="app-brand"><div class="brand-icon">🧠</div><div><div class="brand-name">LocalGPT</div><div class="brand-sub">Alzheimer Research</div></div></div>
+      <div class="user-pill"><div class="user-avatar" id="userAvatar">?</div><div class="user-email" id="userEmail">loading...</div><button class="logout-btn" onclick="logout()">Logout</button></div>
+      <button class="new-chat-btn" onclick="createNewSession()">+ New conversation</button>
+    </div>
+    <div class="sidebar-section">Your conversations</div>
+    <div class="sessions-list" id="sessionsList"></div>
+    <div class="sidebar-footer">
+      <button class="footer-btn" onclick="exportHistory()">↓ Export</button>
+      <button class="footer-btn danger" onclick="showClearModal()">🗑 Clear all</button>
+    </div>
+  </div>
+  <div class="main-content">
+    <header>
+      <div style="display:flex;align-items:center;gap:12px">
+        <button class="hamburger" onclick="toggleSidebar()" style="display:none;width:36px;height:36px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;cursor:pointer;color:var(--text);font-size:18px;align-items:center;justify-content:center;flex-shrink:0">☰</button>
+        <div><div class="chat-title" id="headerTitle">Select or start a chat</div><div class="chat-subtitle">LocalGPT · private · local</div></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px"><span class="memory-badge">🧩 memory on</span><div class="status"><span class="status-dot"></span><span id="statusText">online</span></div></div>
+    </header>
+    <div class="chat-container" id="chat">
+      <div class="welcome-screen" id="welcomeScreen">
+        <div class="welcome-icon">🧠</div>
+        <h2>Alzheimer Research Assistant</h2>
+        <p>Ask me anything about Alzheimer's disease. I have access to research papers and clinical guidelines.</p>
+        <div class="suggestion-grid">
+          <div class="suggestion-card" onclick="useSuggestion(this)"><strong>CAUSES</strong>What are the main risk factors for Alzheimer's?</div>
+          <div class="suggestion-card" onclick="useSuggestion(this)"><strong>SYMPTOMS</strong>What are early warning signs of Alzheimer's?</div>
+          <div class="suggestion-card" onclick="useSuggestion(this)"><strong>TREATMENT</strong>What treatments are currently available?</div>
+          <div class="suggestion-card" onclick="useSuggestion(this)"><strong>RESEARCH</strong>What are the latest research developments?</div>
+        </div>
+      </div>
+    </div>
+    <div class="input-container">
+      <div class="attachments-preview" id="attachmentsPreview"></div>
+      <div class="input-row">
+        <label class="icon-btn" title="Attach PDF">📎<input type="file" id="fileInput" accept=".pdf,.txt,.png,.jpg,.jpeg" onchange="handleFileSelect(event)" multiple></label>
+        <textarea id="message" placeholder="Ask about Alzheimer's research..." onkeydown="handleKeyPress(event)" oninput="autoResize(this)" rows="1"></textarea>
+        <button class="send-btn" onclick="sendMessage()" id="sendBtn">↑</button>
+      </div>
+      <div class="input-hint">Enter to send · Shift+Enter for new line · conversations are remembered</div>
+    </div>
+  </div>
+</div>
+<div class="overlay" id="sidebarOverlay" onclick="toggleSidebar()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:49"></div>
+<div class="modal-overlay" id="clearModal">
+  <div class="modal"><h3>Clear all history?</h3><p>This will permanently delete all your conversations.</p>
+    <div class="modal-btns"><button class="modal-btn" onclick="hideClearModal()">Cancel</button><button class="modal-btn danger" onclick="clearAllHistory()">Delete all</button></div>
+  </div>
+</div><script>
+let currentSessionId=null,sessions=[],attachedFiles=[],isGenerating=false;
+let authToken=localStorage.getItem("lgpt_token");
+let currentUser=JSON.parse(localStorage.getItem("lgpt_user")||"null");
+let messageHistory={},currentTab="login";
+marked.setOptions({breaks:true,gfm:true});
+function init(){if(authToken&&currentUser){showApp()}else{showAuth()}}
+function showAuth(){document.getElementById("authScreen").style.display="flex";document.getElementById("appScreen").classList.remove("show");setTimeout(()=>document.getElementById("authEmail").focus(),100)}
+function showApp(){document.getElementById("authScreen").style.display="none";document.getElementById("appScreen").classList.add("show");document.getElementById("userEmail").textContent=currentUser.email;document.getElementById("userAvatar").textContent=currentUser.email[0].toUpperCase();loadSessions();checkHealth();setTimeout(()=>document.getElementById("message").focus(),100)}
+function switchTab(tab){currentTab=tab;document.querySelectorAll(".auth-tab").forEach((t,i)=>t.classList.toggle("active",(i===0&&tab==="login")||(i===1&&tab==="register")));document.getElementById("authBtn").textContent=tab==="login"?"Sign in":"Create account";document.getElementById("authError").classList.remove("show")}
+function authKeyPress(e){if(e.key==="Enter")submitAuth()}
+async function submitAuth(){
+  const email=document.getElementById("authEmail").value.trim();
+  const password=document.getElementById("authPassword").value;
+  const errEl=document.getElementById("authError");
+  const btn=document.getElementById("authBtn");
+  errEl.classList.remove("show");btn.disabled=true;btn.textContent="Please wait...";
+  try{
+    const endpoint=currentTab==="login"?"/auth/login":"/auth/register";
+    const res=await fetch(endpoint,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email,password})});
+    const data=await res.json();
+    if(data.error){errEl.textContent=data.error;errEl.classList.add("show");btn.disabled=false;btn.textContent=currentTab==="login"?"Sign in":"Create account";return}
+    authToken=data.token;currentUser={user_id:data.user_id,email:data.email};
+    localStorage.setItem("lgpt_token",authToken);localStorage.setItem("lgpt_user",JSON.stringify(currentUser));
+    showApp();
+  }catch(e){errEl.textContent="Connection error. Please try again.";errEl.classList.add("show");btn.disabled=false;btn.textContent=currentTab==="login"?"Sign in":"Create account"}
+}
+function toggleSidebar(){
+  const sidebar = document.getElementById("sidebar");
+  const overlay = document.getElementById("sidebarOverlay");
+  sidebar.classList.toggle("open");
+  overlay.style.display = sidebar.classList.contains("open") ? "block" : "none";
+}
+function logout(){authToken=null;currentUser=null;localStorage.removeItem("lgpt_token");localStorage.removeItem("lgpt_user");messageHistory={};currentSessionId=null;showAuth()}
+function authHeaders(){return{"Content-Type":"application/json","Authorization":"Bearer "+authToken}}
+async function loadSessions(){try{const r=await fetch("/sessions?user_id="+currentUser.user_id,{headers:authHeaders()});const d=await r.json();sessions=d.sessions||[];renderSessions()}catch(e){}}
+function renderSessions(){const l=document.getElementById("sessionsList");l.innerHTML="";sessions.forEach(s=>{const el=document.createElement("div");el.className="session-item"+(s.id===currentSessionId?" active":"");el.innerHTML=`<span class="session-title" onclick="loadSession('${s.id}')">${s.title||"New Chat"}</span><span class="delete-session" onclick="deleteSession('${s.id}',event)">×</span>`;l.appendChild(el)})}
+async function createNewSession(){try{const r=await fetch("/sessions",{method:"POST",headers:authHeaders(),body:JSON.stringify({title:"New Chat",user_id:currentUser.user_id})});const d=await r.json();currentSessionId=d.id;messageHistory[currentSessionId]=[];await loadSessions();clearChat();document.getElementById("headerTitle").textContent="New Chat";document.getElementById("message").focus()}catch(e){}}
+async function loadSession(sid){try{const r=await fetch("/sessions/"+sid,{headers:authHeaders()});const d=await r.json();currentSessionId=sid;renderSessions();clearChat();document.getElementById("headerTitle").textContent=d.session?.title||"Chat";if(d.messages?.length>0){messageHistory[sid]=d.messages.map(m=>({role:m.role==="user"?"user":"assistant",content:m.content}));d.messages.forEach(m=>addMessage(m.content,m.role==="user"?"user":"bot",false))}else{messageHistory[sid]=[]}}catch(e){}}
+async function deleteSession(sid,e){e.stopPropagation();if(!confirm("Delete this conversation?"))return;await fetch("/sessions/"+sid,{method:"DELETE",headers:authHeaders()});delete messageHistory[sid];if(sid===currentSessionId){currentSessionId=null;clearChat()}await loadSessions()}
+function clearChat(){document.getElementById("chat").innerHTML=`<div class="welcome-screen" id="welcomeScreen"><div class="welcome-icon">🧠</div><h2>Alzheimer Research Assistant</h2><p>Ask me anything about Alzheimer's disease.</p><div class="suggestion-grid"><div class="suggestion-card" onclick="useSuggestion(this)"><strong>CAUSES</strong>What are the main risk factors?</div><div class="suggestion-card" onclick="useSuggestion(this)"><strong>SYMPTOMS</strong>What are early warning signs?</div><div class="suggestion-card" onclick="useSuggestion(this)"><strong>TREATMENT</strong>What treatments exist?</div><div class="suggestion-card" onclick="useSuggestion(this)"><strong>RESEARCH</strong>Latest developments?</div></div></div>`}
+function useSuggestion(el){document.getElementById("message").value=el.innerText.replace(/^[A-Z]+\n/,"").trim();document.getElementById("message").focus()}
+function handleFileSelect(e){Array.from(e.target.files).forEach(f=>attachedFiles.push(f));renderAttachments()}
+function renderAttachments(){const p=document.getElementById("attachmentsPreview");p.innerHTML="";attachedFiles.forEach((f,i)=>{const el=document.createElement("div");el.className="attachment-item";el.innerHTML=`<span>📄 ${f.name}</span><span class="remove-attachment" onclick="removeAttachment(${i})">×</span>`;p.appendChild(el)})}
+function removeAttachment(i){attachedFiles.splice(i,1);renderAttachments()}
+function handleKeyPress(e){if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendMessage()}}
+function autoResize(el){el.style.height="auto";el.style.height=Math.min(el.scrollHeight,140)+"px"}
+function addMessage(text,sender,isError=false){const chat=document.getElementById("chat");const w=document.getElementById("welcomeScreen");if(w)w.remove();const wrap=document.createElement("div");wrap.className="message "+sender;const label=document.createElement("div");label.className="msg-label";label.textContent=sender==="user"?"YOU":"ASSISTANT";const bubble=document.createElement("div");bubble.className="message-bubble";if(isError){bubble.classList.add("error-message");bubble.textContent=text}else if(sender==="bot"){bubble.innerHTML=marked.parse(text);bubble.querySelectorAll("pre code").forEach(b=>hljs.highlightElement(b))}else{bubble.textContent=text}wrap.appendChild(label);wrap.appendChild(bubble);chat.appendChild(wrap);chat.scrollTop=chat.scrollHeight;return bubble}
+function showTyping(){const chat=document.getElementById("chat");const w=document.createElement("div");w.className="message bot";w.id="typing-indicator";w.innerHTML="<div class=\"msg-label\">ASSISTANT</div><div class=\"message-bubble typing\"><div class=\"typing-dot\"></div><div class=\"typing-dot\"></div><div class=\"typing-dot\"></div></div>";chat.appendChild(w);chat.scrollTop=chat.scrollHeight}
+function removeTyping(){const t=document.getElementById("typing-indicator");if(t)t.remove()}
+async function typeMessage(el,text,speed=12){return new Promise(r=>{let i=0;const iv=setInterval(()=>{if(i<text.length){el.innerHTML=marked.parse(text.substring(0,++i));el.querySelectorAll("pre code").forEach(b=>hljs.highlightElement(b));document.getElementById("chat").scrollTop=99999}else{clearInterval(iv);r()}},speed)})}
+async function sendMessage(){if(isGenerating)return;if(!currentSessionId)await createNewSession();const textarea=document.getElementById("message");const sendBtn=document.getElementById("sendBtn");const msg=textarea.value.trim();if(!msg&&attachedFiles.length===0)return;isGenerating=true;textarea.disabled=true;sendBtn.disabled=true;textarea.style.height="auto";if(!messageHistory[currentSessionId])messageHistory[currentSessionId]=[];
+if(attachedFiles.length>0){const fd=new FormData();fd.append("file",attachedFiles[0]);try{const up=await fetch("/sessions/"+currentSessionId+"/upload",{method:"POST",headers:{"Authorization":"Bearer "+authToken},body:fd});const ud=await up.json();if(ud.success){addMessage("["+ud.filename+"] "+(msg||"Analyze this"),"user");textarea.value="";showTyping();let fm=msg||"Summarize this document";if(ud.type==="pdf"&&ud.pdf_text)fm="PDF content:\n\n"+ud.pdf_text.substring(0,4000)+"\n\nQuestion: "+(msg||"Summarize this");messageHistory[currentSessionId].push({role:"user",content:fm});const res=await fetch("/sessions/"+currentSessionId+"/messages",{method:"POST",headers:authHeaders(),body:JSON.stringify({message:fm,history:messageHistory[currentSessionId].slice(-10)})});removeTyping();const data=await res.json();const reply=data.reply||"No response";messageHistory[currentSessionId].push({role:"assistant",content:reply});const b=addMessage("","bot");await typeMessage(b,reply)}}catch(e){removeTyping();addMessage("Upload failed: "+e.message,"bot",true)}attachedFiles=[];renderAttachments()}
+else{addMessage(msg,"user");textarea.value="";messageHistory[currentSessionId].push({role:"user",content:msg});showTyping();try{const res=await fetch("/sessions/"+currentSessionId+"/messages",{method:"POST",headers:authHeaders(),body:JSON.stringify({message:msg,history:messageHistory[currentSessionId].slice(-12)})});removeTyping();const data=await res.json();if(data.error){addMessage("Error: "+data.error,"bot",true)}else{const reply=data.reply||"No response";messageHistory[currentSessionId].push({role:"assistant",content:reply});document.getElementById("headerTitle").textContent=msg.length>40?msg.substring(0,40)+"...":msg;const b=addMessage("","bot");await typeMessage(b,reply)}}catch(e){removeTyping();addMessage("Connection error: "+e.message,"bot",true)}}
+isGenerating=false;textarea.disabled=false;sendBtn.disabled=false;textarea.focus()}
+function exportHistory(){if(!currentSessionId)return alert("Open a chat first");const h=messageHistory[currentSessionId]||[];if(!h.length)return alert("No messages to export");const text=h.map(m=>"["+m.role.toUpperCase()+"]\n"+m.content).join("\n\n---\n\n");const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([text],{type:"text/plain"}));a.download="localgpt-chat-"+Date.now()+".txt";a.click()}
+function showClearModal(){document.getElementById("clearModal").classList.add("show")}
+function hideClearModal(){document.getElementById("clearModal").classList.remove("show")}
+async function clearAllHistory(){hideClearModal();for(const s of sessions){try{await fetch("/sessions/"+s.id,{method:"DELETE",headers:authHeaders()})}catch(e){}}messageHistory={};currentSessionId=null;clearChat();await loadSessions()}
+async function checkHealth(){try{const r=await fetch("/health");const d=await r.json();document.getElementById("statusText").textContent=d.status==="ok"?"online":"error"}catch(e){document.getElementById("statusText").textContent="offline"}}
+init();
 </script>
 </body>
 </html>
