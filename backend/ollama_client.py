@@ -42,12 +42,16 @@ class OllamaClient:
         payload = {
             "model": model,
             "messages": messages,
-            "stream": False
+            "stream": False,
+            "options": {
+                "num_predict": 250,
+                "temperature": 0.3
+            }
         }
         
         try:
             print(f"[INFO] Calling Ollama chat with model: {model}")
-            response = requests.post(url, json=payload, timeout=120)
+            response = requests.post(url, json=payload, timeout=90)
             response.raise_for_status()
             data = response.json()
             

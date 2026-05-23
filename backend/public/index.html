@@ -149,10 +149,16 @@ header{padding:12px 14px}
       <button class="auth-tab" onclick="switchTab('register')">Create account</button>
     </div>
     <div class="auth-error" id="authError"></div>
+    <div id="registerFields" style="display:none">
+      <div class="auth-field"><label>FULL NAME</label><input type="text" id="authFullName" placeholder="Dr. Jane Smith" onkeydown="authKeyPress(event)"></div>
+      <div class="auth-field"><label>SPECIALTY</label><input type="text" id="authSpecialty" placeholder="Neurology, Psychiatry, Geriatrics..." onkeydown="authKeyPress(event)"></div>
+      <div class="auth-field"><label>MEDICAL LICENSE NUMBER</label><input type="text" id="authLicense" placeholder="License ID" onkeydown="authKeyPress(event)"></div>
+      <div class="auth-field"><label>INSTITUTION (OPTIONAL)</label><input type="text" id="authInstitution" placeholder="Hospital or clinic name" onkeydown="authKeyPress(event)"></div>
+    </div>
     <div class="auth-field"><label>EMAIL ADDRESS</label><input type="email" id="authEmail" placeholder="you@example.com" onkeydown="authKeyPress(event)"></div>
     <div class="auth-field"><label>PASSWORD</label><input type="password" id="authPassword" placeholder="Min. 6 characters" onkeydown="authKeyPress(event)"></div>
     <button class="auth-btn" id="authBtn" onclick="submitAuth()">Sign in</button>
-    <div class="auth-footer">Your data stays private · stored on your own server</div>
+    <div class="auth-footer">For medical professionals only · Your data stays private</div>
   </div>
 </div>
 <div class="app-screen" id="appScreen">
@@ -162,6 +168,18 @@ header{padding:12px 14px}
       <div class="user-pill"><div class="user-avatar" id="userAvatar">?</div><div class="user-email" id="userEmail">loading...</div><button class="logout-btn" onclick="logout()">Logout</button></div>
       <button class="new-chat-btn" onclick="createNewSession()">+ New conversation</button>
     </div>
+    <div class="sidebar-section">Clinical tools</div>
+    <div style="padding:4px 12px 8px">
+      <button onclick="openTab('diagnosis')" style="width:100%;padding:9px 10px;margin-bottom:4px;background:transparent;border:1px solid var(--border);border-radius:7px;color:var(--text2);font-size:12px;font-family:Sora,sans-serif;cursor:pointer;text-align:left;transition:all 0.15s" onmouseover="this.style.background='var(--bg3)';this.style.color='var(--text)'" onmouseout="this.style.background='transparent';this.style.color='var(--text2)'">
+        <span style="color:var(--accent);font-family:'IBM Plex Mono',monospace;font-size:10px">01</span>&nbsp;&nbsp;Case analysis
+      </button>
+      <button onclick="openTab('research')" style="width:100%;padding:9px 10px;margin-bottom:4px;background:transparent;border:1px solid var(--border);border-radius:7px;color:var(--text2);font-size:12px;font-family:Sora,sans-serif;cursor:pointer;text-align:left;transition:all 0.15s" onmouseover="this.style.background='var(--bg3)';this.style.color='var(--text)'" onmouseout="this.style.background='transparent';this.style.color='var(--text2)'">
+        <span style="color:var(--accent);font-family:'IBM Plex Mono',monospace;font-size:10px">02</span>&nbsp;&nbsp;Literature search
+      </button>
+      <button onclick="openTab('treatment')" style="width:100%;padding:9px 10px;margin-bottom:4px;background:transparent;border:1px solid var(--border);border-radius:7px;color:var(--text2);font-size:12px;font-family:Sora,sans-serif;cursor:pointer;text-align:left;transition:all 0.15s" onmouseover="this.style.background='var(--bg3)';this.style.color='var(--text)'" onmouseout="this.style.background='transparent';this.style.color='var(--text2)'">
+        <span style="color:var(--accent);font-family:'IBM Plex Mono',monospace;font-size:10px">03</span>&nbsp;&nbsp;Treatment options
+      </button>
+    </div>
     <div class="sidebar-section">Your conversations</div>
     <div class="sessions-list" id="sessionsList"></div>
     <div class="sidebar-footer">
@@ -170,7 +188,10 @@ header{padding:12px 14px}
     </div>
   </div>
   <div class="main-content">
-    <header>
+    <div style="background:#1a2540;border-bottom:1px solid rgba(99,130,255,0.2);padding:6px 20px;font-size:11px;color:#94a3b8;text-align:center;font-family:'IBM Plex Mono',monospace">
+  ⚠️ Research prototype — not for clinical decision-making · answers may be incomplete · always verify with current literature
+</div>
+<header>
       <div style="display:flex;align-items:center;gap:12px">
         <button class="hamburger" onclick="toggleSidebar()" style="display:none;width:36px;height:36px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;cursor:pointer;color:var(--text);font-size:18px;align-items:center;justify-content:center;flex-shrink:0">☰</button>
         <div><div class="chat-title" id="headerTitle">Select or start a chat</div><div class="chat-subtitle">LocalGPT · private · local</div></div>
@@ -207,6 +228,57 @@ header{padding:12px 14px}
     <div class="modal-btns"><button class="modal-btn" onclick="hideClearModal()">Cancel</button><button class="modal-btn danger" onclick="clearAllHistory()">Delete all</button></div>
   </div>
 </div><script>
+const CLINICAL_PROMPTS = {
+  diagnosis: {
+    title: "Case Analysis",
+    subtitle: "Help interpret clinical findings and suggest diagnostic considerations",
+    prompts: [
+      "My patient is 68 years old with recent memory loss, difficulty with word-finding, and getting lost in familiar places. What diagnostic workup do you recommend to evaluate for Alzheimer's disease?",
+      "What are the NIA-AA criteria for diagnosing Alzheimer's disease? Include biomarker recommendations.",
+      "How do I differentiate Alzheimer's disease from vascular dementia and Lewy body dementia clinically?",
+      "What cognitive screening tools are most sensitive for detecting mild cognitive impairment?"
+    ]
+  },
+  research: {
+    title: "Literature Search",
+    subtitle: "Search our research database for evidence-based answers",
+    prompts: [
+      "What is the current progress in research on APOE4 gene mutations and their role in Alzheimer's disease?",
+      "What are the latest findings on tau protein tangles and their role in disease progression?",
+      "What evidence exists for the role of neuroinflammation in Alzheimer's pathogenesis?",
+      "What are the most promising blood biomarkers for early Alzheimer's detection?"
+    ]
+  },
+  treatment: {
+    title: "Treatment Options",
+    subtitle: "Evidence-based interventions (pharmacological and non-pharmacological)",
+    prompts: [
+      "What FDA-approved treatments currently exist for Alzheimer's disease, and what are their indications and limitations?",
+      "What non-pharmacological interventions have strong evidence for managing behavioral and psychological symptoms of dementia (BPSD)?",
+      "How should I approach a patient with significant agitation and aggression? Include both pharmacological and non-pharmacological options.",
+      "What are the current guidelines for prescribing lecanemab or donanemab? Who is a good candidate?"
+    ]
+  }
+};
+
+function openTab(tabKey) {
+  const tab = CLINICAL_PROMPTS[tabKey];
+  if (!tab) return;
+  if (!currentSessionId) createNewSession().then(() => renderClinicalTab(tab));
+  else renderClinicalTab(tab);
+}
+
+function renderClinicalTab(tab) {
+  const chat = document.getElementById("chat");
+  const cards = tab.prompts.map(p => `<div class="suggestion-card" onclick="usePromptAndSend(this)" data-prompt="${p.replace(/"/g,'&quot;')}">${p}</div>`).join("");
+  chat.innerHTML = `<div class="welcome-screen"><div class="welcome-icon">🔬</div><h2>${tab.title}</h2><p>${tab.subtitle}</p><div class="suggestion-grid" style="grid-template-columns:1fr">${cards}</div></div>`;
+}
+
+function usePromptAndSend(el) {
+  document.getElementById("message").value = el.getAttribute("data-prompt");
+  sendMessage();
+}
+
 let currentSessionId=null,sessions=[],attachedFiles=[],isGenerating=false;
 let authToken=localStorage.getItem("lgpt_token");
 let currentUser=JSON.parse(localStorage.getItem("lgpt_user")||"null");
@@ -215,7 +287,7 @@ marked.setOptions({breaks:true,gfm:true});
 function init(){if(authToken&&currentUser){showApp()}else{showAuth()}}
 function showAuth(){document.getElementById("authScreen").style.display="flex";document.getElementById("appScreen").classList.remove("show");setTimeout(()=>document.getElementById("authEmail").focus(),100)}
 function showApp(){document.getElementById("authScreen").style.display="none";document.getElementById("appScreen").classList.add("show");document.getElementById("userEmail").textContent=currentUser.email;document.getElementById("userAvatar").textContent=currentUser.email[0].toUpperCase();loadSessions();checkHealth();setTimeout(()=>document.getElementById("message").focus(),100)}
-function switchTab(tab){currentTab=tab;document.querySelectorAll(".auth-tab").forEach((t,i)=>t.classList.toggle("active",(i===0&&tab==="login")||(i===1&&tab==="register")));document.getElementById("authBtn").textContent=tab==="login"?"Sign in":"Create account";document.getElementById("authError").classList.remove("show")}
+function switchTab(tab){currentTab=tab;document.querySelectorAll(".auth-tab").forEach((t,i)=>t.classList.toggle("active",(i===0&&tab==="login")||(i===1&&tab==="register")));document.getElementById("authBtn").textContent=tab==="login"?"Sign in":"Create doctor account";document.getElementById("authError").classList.remove("show");document.getElementById("registerFields").style.display=tab==="register"?"block":"none"}
 function authKeyPress(e){if(e.key==="Enter")submitAuth()}
 async function submitAuth(){
   const email=document.getElementById("authEmail").value.trim();
@@ -225,7 +297,7 @@ async function submitAuth(){
   errEl.classList.remove("show");btn.disabled=true;btn.textContent="Please wait...";
   try{
     const endpoint=currentTab==="login"?"/auth/login":"/auth/register";
-    const res=await fetch(endpoint,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email,password})});
+    const res=await fetch(endpoint,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email,password,full_name:document.getElementById("authFullName")?.value||"",specialty:document.getElementById("authSpecialty")?.value||"",license_number:document.getElementById("authLicense")?.value||"",institution:document.getElementById("authInstitution")?.value||""})});
     const data=await res.json();
     if(data.error){errEl.textContent=data.error;errEl.classList.add("show");btn.disabled=false;btn.textContent=currentTab==="login"?"Sign in":"Create account";return}
     authToken=data.token;currentUser={user_id:data.user_id,email:data.email};
@@ -253,7 +325,24 @@ function renderAttachments(){const p=document.getElementById("attachmentsPreview
 function removeAttachment(i){attachedFiles.splice(i,1);renderAttachments()}
 function handleKeyPress(e){if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendMessage()}}
 function autoResize(el){el.style.height="auto";el.style.height=Math.min(el.scrollHeight,140)+"px"}
-function addMessage(text,sender,isError=false){const chat=document.getElementById("chat");const w=document.getElementById("welcomeScreen");if(w)w.remove();const wrap=document.createElement("div");wrap.className="message "+sender;const label=document.createElement("div");label.className="msg-label";label.textContent=sender==="user"?"YOU":"ASSISTANT";const bubble=document.createElement("div");bubble.className="message-bubble";if(isError){bubble.classList.add("error-message");bubble.textContent=text}else if(sender==="bot"){bubble.innerHTML=marked.parse(text);bubble.querySelectorAll("pre code").forEach(b=>hljs.highlightElement(b))}else{bubble.textContent=text}wrap.appendChild(label);wrap.appendChild(bubble);chat.appendChild(wrap);chat.scrollTop=chat.scrollHeight;return bubble}
+function addFeedbackButtons(wrap){
+  const fb=document.createElement('div');
+  fb.style.cssText='display:flex;gap:8px;margin-top:6px;padding-left:4px';
+  fb.innerHTML=`<button onclick="flagMsg(this,'good')" style="background:none;border:1px solid var(--border);border-radius:6px;padding:2px 8px;color:var(--text2);font-size:11px;cursor:pointer">👍</button><button onclick="flagMsg(this,'bad')" style="background:none;border:1px solid var(--border);border-radius:6px;padding:2px 8px;color:var(--text2);font-size:11px;cursor:pointer">👎 Flag</button>`;
+  wrap.appendChild(fb);
+}
+function flagMsg(btn,type){
+  const txt=btn.closest('.message')?.querySelector('.message-bubble')?.innerText||'';
+  if(type==='bad'){
+    const fix=prompt('What is wrong? (optional)');
+    fetch('/feedback',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+authToken},body:JSON.stringify({type:'incorrect',message:txt,correction:fix||'',session_id:currentSessionId})});
+    btn.parentElement.innerHTML='<span style="font-size:11px;color:#ff5470">⚠️ Flagged — thank you</span>';
+  } else {
+    btn.parentElement.innerHTML='<span style="font-size:11px;color:#34d399">✓ Marked correct</span>';
+    fetch('/feedback',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+authToken},body:JSON.stringify({type:'correct',message:txt,session_id:currentSessionId})});
+  }
+}
+function addMessage(text,sender,isError=false){const chat=document.getElementById("chat");const w=document.getElementById("welcomeScreen");if(w)w.remove();const wrap=document.createElement("div");wrap.className="message "+sender;const label=document.createElement("div");label.className="msg-label";label.textContent=sender==="user"?"YOU":"ASSISTANT";const bubble=document.createElement("div");bubble.className="message-bubble";if(isError){bubble.classList.add("error-message");bubble.textContent=text}else if(sender==="bot"){bubble.innerHTML=marked.parse(text);bubble.querySelectorAll("pre code").forEach(b=>hljs.highlightElement(b))}else{bubble.textContent=text}wrap.appendChild(label);wrap.appendChild(bubble);if(sender==='bot'&&!isError)setTimeout(()=>addFeedbackButtons(wrap),100);chat.appendChild(wrap);chat.scrollTop=chat.scrollHeight;return bubble}
 function showTyping(){const chat=document.getElementById("chat");const w=document.createElement("div");w.className="message bot";w.id="typing-indicator";w.innerHTML="<div class=\"msg-label\">ASSISTANT</div><div class=\"message-bubble typing\"><div class=\"typing-dot\"></div><div class=\"typing-dot\"></div><div class=\"typing-dot\"></div></div>";chat.appendChild(w);chat.scrollTop=chat.scrollHeight}
 function removeTyping(){const t=document.getElementById("typing-indicator");if(t)t.remove()}
 async function typeMessage(el,text,speed=12){return new Promise(r=>{let i=0;const iv=setInterval(()=>{if(i<text.length){el.innerHTML=marked.parse(text.substring(0,++i));el.querySelectorAll("pre code").forEach(b=>hljs.highlightElement(b));document.getElementById("chat").scrollTop=99999}else{clearInterval(iv);r()}},speed)})}

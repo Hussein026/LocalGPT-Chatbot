@@ -6,9 +6,7 @@ from datetime import datetime, timedelta
 
 SECRET_KEY = "localgpt-alzheimer-secret-2024"
 TOKEN_EXPIRY_DAYS = 7
-
-def get_db_path():
-    return "/root/LocalGPT-Chatbot/backend/chat_data.db"
+DB_PATH = "/root/LocalGPT-Chatbot/backend/chat_data.db"
 
 def hash_password(password):
     return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
@@ -29,15 +27,17 @@ def verify_token(token):
     except:
         return None
 
-def register_user(email, password):
+def register_user(email, password, full_name="", specialty="", license_number="", institution=""):
     if not email or not password:
         return {"error": "Email and password required"}
+    if not full_name or not specialty or not license_number:
+        return {"error": "Full name, specialty and license number are required for doctor registration"}
     if len(password) < 6:
         return {"error": "Password must be at least 6 characters"}
     if "@" not in email:
         return {"error": "Invalid email address"}
     try:
-        conn = sqlite3.connect(get_db_path())
+        conn = sqlite3.connect(DB_PATH)
         existing = conn.execute("SELECT id FROM users WHERE email=? OR username=?", (email, email)).fetchone()
         if existing:
             conn.close()
@@ -45,10 +45,20 @@ def register_user(email, password):
         user_id = str(uuid.uuid4())
         password_hash = hash_password(password)
         now = datetime.now().isoformat()
-        conn.execute("INSERT INTO users (id, username, password_hash, email, created_at) VALUES (?,?,?,?,?)", (user_id, email, password_hash, email, now))
+        conn.execute("""INSERT INTO users (id, username, password_hash, email, created_at, full_name, specialty, license_number, institution, is_verified, role)
+                        VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                     (user_id, email, password_hash, email, now, full_name, specialty, license_number, institution, 0, "doctor"))
         conn.commit()
         conn.close()
-        return {"token": create_token(user_id, email), "user_id": user_id, "email": email}
+        return {
+            "token": create_token(user_id, email),
+            "user_id": user_id,
+            "email": email,
+            "full_name": full_name,
+            "specialty": specialty,
+            "is_verified": 0,
+            "role": "doctor"
+        }
     except Exception as e:
         return {"error": str(e)}
 
@@ -56,19 +66,27 @@ def login_user(email, password):
     if not email or not password:
         return {"error": "Email and password required"}
     try:
-        conn = sqlite3.connect(get_db_path())
+        conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
-        row = conn.execute("SELECT id, password_hash, email FROM users WHERE email=? OR username=?", (email, email)).fetchone()
+        row = conn.execute("SELECT id, password_hash, email, full_name, specialty, is_verified, role FROM users WHERE email=? OR username=?", (email, email)).fetchone()
         conn.close()
         if not row:
             return {"error": "Invalid email or password"}
         if not verify_password(password, row["password_hash"]):
             return {"error": "Invalid email or password"}
-        conn = sqlite3.connect(get_db_path())
+        conn = sqlite3.connect(DB_PATH)
         conn.execute("UPDATE users SET last_login=? WHERE id=?", (datetime.now().isoformat(), row["id"]))
         conn.commit()
         conn.close()
-        return {"token": create_token(row["id"], row["email"]), "user_id": row["id"], "email": row["email"]}
+        return {
+            "token": create_token(row["id"], row["email"]),
+            "user_id": row["id"],
+            "email": row["email"],
+            "full_name": row["full_name"] or "",
+            "specialty": row["specialty"] or "",
+            "is_verified": row["is_verified"] or 0,
+            "role": row["role"] or "doctor"
+        }
     except Exception as e:
         return {"error": str(e)}
 

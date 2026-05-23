@@ -17,6 +17,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from database import db, generate_session_title
 import simple_pdf_processor as pdf_module
+import pdf_knowledge
 from ollama_client import OllamaClient
 
 # ------------------------------
@@ -25,7 +26,15 @@ from ollama_client import OllamaClient
 DEFAULT_MODEL = "qwen2.5:0.5b-instruct-q4_K_M"  # Fast model
 SMART_MODEL = "qwen2.5:3b-instruct-q4_K_M"  # Smart model for complex queries
 VISION_MODEL = "llava:7b"  # Vision model for images
-SYSTEM_PROMPT = "You are a concise, accurate assistant."
+SYSTEM_PROMPT = """You are a clinical assistant ONLY for Alzheimer's disease. You speak with medical doctors.
+
+STRICT RULES:
+- ONLY answer questions about Alzheimer's disease, dementia, related neurodegenerative conditions, caregiving for Alzheimer's patients, and Alzheimer's research.
+- If the user asks about ANY other topic (cooking, coding, general medicine, other diseases), you MUST respond exactly: "I only answer questions related to Alzheimer's disease. Is there something about Alzheimer's I can help you with?"
+- NEVER invent medications, mechanisms, or treatments. If unsure, say: "I don't have reliable information on that specific question."
+- Alzheimer's has NO CURE. Only symptom management exists: cholinesterase inhibitors (donepezil, rivastigmine, galantamine), memantine (NMDA receptor antagonist, NOT an antihistamine), and anti-amyloid antibodies (lecanemab, donanemab) for early stages.
+- Keep answers concise, medically accurate, and clinical in tone.
+- If you don't know, say "I don't know" — never guess."""
 
 # Auto-naming configuration
 AUTO_NAME_CHATS = True  # Enable automatic chat naming
@@ -89,6 +98,18 @@ class ChatHandler(http.server.BaseHTTPRequestHandler):
             except FileNotFoundError:
                 return self._send_json({"error": "Frontend not found"}, 404)
 
+        if path == "/admin/feedback":
+            return self._handle_admin_feedback()
+        if path == "/admin.html":
+            try:
+                with open("public/admin.html", "rb") as f:
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/html")
+                    self.end_headers()
+                    self.wfile.write(f.read())
+                    return
+            except:
+                return self._send_json({"error": "Not found"}, 404)
         if path.startswith("/static/") or path.endswith((".js", ".css")):
             file_path = f"public{path}"
             if os.path.exists(file_path):
@@ -135,6 +156,17 @@ class ChatHandler(http.server.BaseHTTPRequestHandler):
 
         if path == "/auth/register":
             return self._handle_register()
+        if path.endswith(".html") and path != "/":
+            filename = path.lstrip("/")
+            filepath = os.path.join(PUBLIC_DIR, filename)
+            if os.path.exists(filepath):
+                with open(filepath, "r") as f:
+                    self._send_response(f.read(), "text/html")
+                return
+        if path == "/admin/feedback":
+            return self._handle_admin_feedback()
+        if path == "/feedback":
+            return self._handle_feedback()
         if path == "/auth/login":
             return self._handle_login()
         if path == "/chat":
@@ -179,8 +211,50 @@ class ChatHandler(http.server.BaseHTTPRequestHandler):
             import auth as _auth
             length = int(self.headers.get("Content-Length", 0))
             data = __import__('json').loads(self.rfile.read(length).decode())
-            result = _auth.register_user(data.get("email",""), data.get("password",""))
+            result = _auth.register_user(
+                data.get("email",""),
+                data.get("password",""),
+                data.get("full_name",""),
+                data.get("specialty",""),
+                data.get("license_number",""),
+                data.get("institution","")
+            )
             return self._send_json(result, 400 if "error" in result else 200)
+        except Exception as e:
+            return self._send_json({"error": str(e)}, 500)
+
+    def _handle_admin_feedback(self):
+        try:
+            import sqlite3
+            conn = sqlite3.connect("/root/LocalGPT-Chatbot/backend/chat_data.db")
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute("SELECT * FROM feedback ORDER BY created_at DESC LIMIT 200").fetchall()
+            conn.close()
+            feedback = [dict(r) for r in rows]
+            return self._send_json({"feedback": feedback})
+        except Exception as e:
+            return self._send_json({"feedback": []})
+
+    def _handle_feedback(self):
+        try:
+            import json as _json
+            length = int(self.headers.get("Content-Length", 0))
+            data = _json.loads(self.rfile.read(length).decode())
+            feedback_type = data.get("type", "unknown")
+            message = data.get("message", "")[:500]
+            correction = data.get("correction", "")[:500]
+            session_id = data.get("session_id", "")
+            import sqlite3, datetime
+            conn = sqlite3.connect("/root/LocalGPT-Chatbot/backend/chat_data.db")
+            conn.execute("""CREATE TABLE IF NOT EXISTS feedback
+                (id INTEGER PRIMARY KEY AUTOINCREMENT, type TEXT, message TEXT,
+                correction TEXT, session_id TEXT, created_at TEXT)""")
+            conn.execute("INSERT INTO feedback (type, message, correction, session_id, created_at) VALUES (?,?,?,?,?)",
+                (feedback_type, message, correction, session_id, datetime.datetime.now().isoformat()))
+            conn.commit()
+            conn.close()
+            print(f"[FEEDBACK] {feedback_type}: {message[:80]}")
+            return self._send_json({"ok": True})
         except Exception as e:
             return self._send_json({"error": str(e)}, 500)
 
@@ -546,8 +620,8 @@ class ChatHandler(http.server.BaseHTTPRequestHandler):
             try:
                 past_messages = db.get_conversation_history(sid)
                 # Keep last 10 exchanges (20 messages) to avoid token overflow
-                if len(past_messages) > 20:
-                    past_messages = past_messages[-20:]
+                if len(past_messages) > 6:
+                    past_messages = past_messages[-6:]
                 messages.extend(past_messages)
                 print(f"[MEMORY] Loaded {len(past_messages)} past messages for session {sid[:8]}")
             except Exception as e:
@@ -557,7 +631,21 @@ class ChatHandler(http.server.BaseHTTPRequestHandler):
             if tool_result:
                 messages.append({"role": "system", "content": f"Tool result: {tool_result}"})
 
-            # 4. ADD CURRENT USER MESSAGE
+            # 4. SEARCH PDFs FOR RELEVANT CONTEXT
+            try:
+                pdf_context = pdf_knowledge.get_context_for_query(user_message, max_chars=1000)
+                if pdf_context:
+                    messages.append({
+                        "role": "system",
+                        "content": f"Use the following research excerpts from Alzheimer's medical papers to answer the user's question. Always cite the source name in brackets when using information from these excerpts.\n\n{pdf_context}"
+                    })
+                    print(f"[PDF] Injected context: {len(pdf_context)} chars")
+                else:
+                    print("[PDF] No relevant context found")
+            except Exception as e:
+                print(f"[PDF] Error: {e}")
+
+            # 5. ADD CURRENT USER MESSAGE
             messages.append({"role": "user", "content": user_message})
 
             # CALL OLLAMA (with image if present)
@@ -884,6 +972,7 @@ def main():
 
     host = "0.0.0.0"
 
+    ThreadedTCPServer.allow_reuse_address = True
     with ThreadedTCPServer((host, PORT), ChatHandler) as httpd:
         print(f"🚀 Backend running on http://{host}:{PORT}")
         print(f"📊 Threading enabled - supports multiple concurrent requests")

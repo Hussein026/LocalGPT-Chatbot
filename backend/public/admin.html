@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin - Feedback Review</title>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0e1117;color:#e2e8f0;font-family:Sora,sans-serif;padding:40px 20px}
+h1{font-size:22px;font-weight:600;margin-bottom:4px}
+.sub{color:#94a3b8;font-size:13px;margin-bottom:32px}
+.stats{display:flex;gap:16px;margin-bottom:32px;flex-wrap:wrap}
+.stat{background:#161b25;border:1px solid rgba(99,130,255,0.15);border-radius:12px;padding:16px 24px}
+.stat-num{font-size:28px;font-weight:600;color:#6382ff}
+.stat-label{font-size:12px;color:#94a3b8;margin-top:4px}
+.filters{display:flex;gap:8px;margin-bottom:20px}
+.fbtn{padding:6px 16px;border-radius:8px;border:1px solid rgba(99,130,255,0.2);background:transparent;color:#94a3b8;cursor:pointer;font-family:Sora,sans-serif;font-size:13px}
+.fbtn.active{background:#6382ff;color:#fff}
+.card{background:#161b25;border:1px solid rgba(99,130,255,0.15);border-radius:12px;padding:20px;margin-bottom:12px}
+.card.flagged{border-left:3px solid #ff5470}
+.card.correct{border-left:3px solid #34d399}
+.card-header{display:flex;justify-content:space-between;margin-bottom:12px}
+.badge{padding:3px 10px;border-radius:20px;font-size:11px}
+.badge.flagged{background:rgba(255,84,112,0.15);color:#ff5470}
+.badge.correct{background:rgba(52,211,153,0.15);color:#34d399}
+.date{font-size:11px;color:#4a5568}
+.msg{font-size:13px;color:#94a3b8;line-height:1.6;padding:12px;background:#0e1117;border-radius:8px;margin-bottom:8px}
+.fix{font-size:13px;color:#fbbf24;padding:10px;background:rgba(251,191,36,0.05);border:1px solid rgba(251,191,36,0.2);border-radius:8px;margin-top:8px}
+.empty{text-align:center;padding:60px;color:#4a5568}
+.login{max-width:360px;margin:100px auto;background:#161b25;border:1px solid rgba(99,130,255,0.2);border-radius:16px;padding:32px}
+input{width:100%;padding:10px 14px;background:#0e1117;border:1px solid rgba(99,130,255,0.2);border-radius:8px;color:#e2e8f0;font-family:Sora,sans-serif;font-size:14px;margin-bottom:12px}
+.btn{width:100%;padding:10px;background:#6382ff;border:none;border-radius:8px;color:#fff;font-family:Sora,sans-serif;font-size:14px;cursor:pointer}
+.err{color:#ff5470;font-size:13px;margin-bottom:12px}
+</style>
+</head>
+<body>
+<div id="loginBox" class="login">
+  <h2 style="margin-bottom:20px;font-size:18px">Admin Login</h2>
+  <div id="err" class="err" style="display:none"></div>
+  <input type="password" id="pass" placeholder="Admin password" onkeydown="if(event.key==='Enter')login()">
+  <button class="btn" onclick="login()">Login</button>
+</div>
+<div id="panel" style="display:none">
+  <h1>Feedback Review</h1>
+  <div class="sub">Clinical validation dashboard</div>
+  <div class="stats" id="stats"></div>
+  <div class="filters">
+    <button class="fbtn active" onclick="filter('all',this)">All</button>
+    <button class="fbtn" onclick="filter('incorrect',this)">Flagged</button>
+    <button class="fbtn" onclick="filter('correct',this)">Correct</button>
+  </div>
+  <div id="list"></div>
+</div>
+<script>
+let all=[];
+function login(){
+  if(document.getElementById("pass").value==="alzheimer-admin-2024"){
+    document.getElementById("loginBox").style.display="none";
+    document.getElementById("panel").style.display="block";
+    load();
+  } else {
+    document.getElementById("err").textContent="Wrong password";
+    document.getElementById("err").style.display="block";
+  }
+}
+async function load(){
+  const r=await fetch("/admin/feedback");
+  const d=await r.json();
+  all=d.feedback||[];
+  const total=all.length;
+  const flagged=all.filter(f=>f.type==="incorrect").length;
+  const correct=all.filter(f=>f.type==="correct").length;
+  document.getElementById("stats").innerHTML=
+    "<div class='stat'><div class='stat-num'>"+total+"</div><div class='stat-label'>Total</div></div>"+
+    "<div class='stat'><div class='stat-num' style='color:#ff5470'>"+flagged+"</div><div class='stat-label'>Flagged</div></div>"+
+    "<div class='stat'><div class='stat-num' style='color:#34d399'>"+correct+"</div><div class='stat-label'>Correct</div></div>";
+  render(all);
+}
+function filter(type,btn){
+  document.querySelectorAll(".fbtn").forEach(b=>b.classList.remove("active"));
+  btn.classList.add("active");
+  render(type==="all"?all:all.filter(f=>f.type===type));
+}
+function render(items){
+  if(!items.length){document.getElementById("list").innerHTML="<div class='empty'>No feedback yet</div>";return;}
+  document.getElementById("list").innerHTML=items.map(f=>
+    "<div class='card "+(f.type==="incorrect"?"flagged":"correct")+"'>"+
+    "<div class='card-header'><span class='badge "+(f.type==="incorrect"?"flagged":"correct")+"'>"+(f.type==="incorrect"?"Flagged":"Correct")+"</span>"+
+    "<span class='date'>"+(f.created_at||"").substring(0,16)+"</span></div>"+
+    "<div class='msg'>"+(f.message||"(no message)")+"</div>"+
+    (f.correction?"<div class='fix'>Doctor correction: "+f.correction+"</div>":"")+
+    "</div>"
+  ).join("");
+}
+</script>
+</body>
+</html>
