@@ -343,8 +343,19 @@ function flagMsg(btn,type){
   }
 }
 function addMessage(text,sender,isError=false){const chat=document.getElementById("chat");const w=document.getElementById("welcomeScreen");if(w)w.remove();const wrap=document.createElement("div");wrap.className="message "+sender;const label=document.createElement("div");label.className="msg-label";label.textContent=sender==="user"?"YOU":"ASSISTANT";const bubble=document.createElement("div");bubble.className="message-bubble";if(isError){bubble.classList.add("error-message");bubble.textContent=text}else if(sender==="bot"){bubble.innerHTML=marked.parse(text);bubble.querySelectorAll("pre code").forEach(b=>hljs.highlightElement(b))}else{bubble.textContent=text}wrap.appendChild(label);wrap.appendChild(bubble);if(sender==='bot'&&!isError)setTimeout(()=>addFeedbackButtons(wrap),100);chat.appendChild(wrap);chat.scrollTop=chat.scrollHeight;return bubble}
-function showTyping(){const chat=document.getElementById("chat");const w=document.createElement("div");w.className="message bot";w.id="typing-indicator";w.innerHTML="<div class=\"msg-label\">ASSISTANT</div><div class=\"message-bubble typing\"><div class=\"typing-dot\"></div><div class=\"typing-dot\"></div><div class=\"typing-dot\"></div></div>";chat.appendChild(w);chat.scrollTop=chat.scrollHeight}
-function removeTyping(){const t=document.getElementById("typing-indicator");if(t)t.remove()}
+function showTyping(){
+  const chat=document.getElementById("chat");
+  const w=document.createElement("div");
+  w.className="message bot";
+  w.id="typing-indicator";
+  const msgs=["Searching research papers...","Analyzing clinical literature...","Generating evidence-based answer...","Almost ready..."];
+  let i=0;
+  w.innerHTML="<div class=\"msg-label\">ASSISTANT</div><div class=\"message-bubble\" id=\"typing-text\" style=\"color:var(--text2);font-size:13px\">Searching research papers...</div>";
+  chat.appendChild(w);
+  chat.scrollTop=chat.scrollHeight;
+  window._typingInterval=setInterval(()=>{i=(i+1)%msgs.length;const el=document.getElementById("typing-text");if(el)el.textContent=msgs[i];},4000);
+}
+function removeTyping(){const t=document.getElementById("typing-indicator");if(t)t.remove();if(window._typingInterval)clearInterval(window._typingInterval);}
 async function typeMessage(el,text,speed=12){return new Promise(r=>{let i=0;const iv=setInterval(()=>{if(i<text.length){el.innerHTML=marked.parse(text.substring(0,++i));el.querySelectorAll("pre code").forEach(b=>hljs.highlightElement(b));document.getElementById("chat").scrollTop=99999}else{clearInterval(iv);r()}},speed)})}
 async function sendMessage(){if(isGenerating)return;if(!currentSessionId)await createNewSession();const textarea=document.getElementById("message");const sendBtn=document.getElementById("sendBtn");const msg=textarea.value.trim();if(!msg&&attachedFiles.length===0)return;isGenerating=true;textarea.disabled=true;sendBtn.disabled=true;textarea.style.height="auto";if(!messageHistory[currentSessionId])messageHistory[currentSessionId]=[];
 if(attachedFiles.length>0){const fd=new FormData();fd.append("file",attachedFiles[0]);try{const up=await fetch("/sessions/"+currentSessionId+"/upload",{method:"POST",headers:{"Authorization":"Bearer "+authToken},body:fd});const ud=await up.json();if(ud.success){addMessage("["+ud.filename+"] "+(msg||"Analyze this"),"user");textarea.value="";showTyping();let fm=msg||"Summarize this document";if(ud.type==="pdf"&&ud.pdf_text)fm="PDF content:\n\n"+ud.pdf_text.substring(0,4000)+"\n\nQuestion: "+(msg||"Summarize this");messageHistory[currentSessionId].push({role:"user",content:fm});const res=await fetch("/sessions/"+currentSessionId+"/messages",{method:"POST",headers:authHeaders(),body:JSON.stringify({message:fm,history:messageHistory[currentSessionId].slice(-10)})});removeTyping();const data=await res.json();const reply=data.reply||"No response";messageHistory[currentSessionId].push({role:"assistant",content:reply});const b=addMessage("","bot");await typeMessage(b,reply)}}catch(e){removeTyping();addMessage("Upload failed: "+e.message,"bot",true)}attachedFiles=[];renderAttachments()}

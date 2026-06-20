@@ -23,13 +23,13 @@ from ollama_client import OllamaClient
 # ------------------------------
 # MODEL CONFIGURATION
 # ------------------------------
-DEFAULT_MODEL = "qwen2.5:0.5b-instruct-q4_K_M"  # Fast model
+DEFAULT_MODEL = "qwen2.5:3b-instruct-q4_K_M"  # Fast model
 SMART_MODEL = "qwen2.5:3b-instruct-q4_K_M"  # Smart model for complex queries
 VISION_MODEL = "llava:7b"  # Vision model for images
 SYSTEM_PROMPT = """You are a clinical assistant ONLY for Alzheimer's disease. You speak with medical doctors.
 
 STRICT RULES:
-- ONLY answer questions about Alzheimer's disease, dementia, related neurodegenerative conditions, caregiving for Alzheimer's patients, and Alzheimer's research.
+- ONLY answer questions about Alzheimer's disease, dementia, related neurodegenerative conditions, caregiving for Alzheimer's patients, Alzheimer's research, nutrition and diet related to brain health and dementia prevention, psychological treatments, and lifestyle factors affecting cognitive decline.
 - If the user asks about ANY other topic (cooking, coding, general medicine, other diseases), you MUST respond exactly: "I only answer questions related to Alzheimer's disease. Is there something about Alzheimer's I can help you with?"
 - NEVER invent medications, mechanisms, or treatments. If unsure, say: "I don't have reliable information on that specific question."
 - Alzheimer's has NO CURE. Only symptom management exists: cholinesterase inhibitors (donepezil, rivastigmine, galantamine), memantine (NMDA receptor antagonist, NOT an antihistamine), and anti-amyloid antibodies (lecanemab, donanemab) for early stages.
@@ -553,7 +553,7 @@ class ChatHandler(http.server.BaseHTTPRequestHandler):
                 {"role": "user", "content": user_msg}
             ]
 
-            resp = ollama.chat(model, messages)
+            resp = ollama.chat_stream(model, messages)
             reply = resp.get("response", "") if isinstance(resp, dict) else str(resp)
             return self._send_json({"response": reply, "model_used": model})
         except Exception as e:
@@ -620,8 +620,8 @@ class ChatHandler(http.server.BaseHTTPRequestHandler):
             try:
                 past_messages = db.get_conversation_history(sid)
                 # Keep last 10 exchanges (20 messages) to avoid token overflow
-                if len(past_messages) > 6:
-                    past_messages = past_messages[-6:]
+                if len(past_messages) > 4:
+                    past_messages = past_messages[-4:]
                 messages.extend(past_messages)
                 print(f"[MEMORY] Loaded {len(past_messages)} past messages for session {sid[:8]}")
             except Exception as e:
@@ -633,7 +633,7 @@ class ChatHandler(http.server.BaseHTTPRequestHandler):
 
             # 4. SEARCH PDFs FOR RELEVANT CONTEXT
             try:
-                pdf_context = pdf_knowledge.get_context_for_query(user_message, max_chars=1000)
+                pdf_context = pdf_knowledge.get_context_for_query(user_message, max_chars=700)
                 if pdf_context:
                     messages.append({
                         "role": "system",
@@ -653,7 +653,7 @@ class ChatHandler(http.server.BaseHTTPRequestHandler):
                 resp = ollama.chat_with_image(model, messages, image_path)
             else:
                 messages = self._trim_context(messages)
-                resp = ollama.chat(model, messages)
+                resp = ollama.chat_stream(model, messages)
                 
             reply = resp.get("response", "") if isinstance(resp, dict) else str(resp)
 

@@ -44,8 +44,12 @@ class OllamaClient:
             "messages": messages,
             "stream": False,
             "options": {
-                "num_predict": 250,
-                "temperature": 0.3
+                "num_predict": 180,
+                "temperature": 0.3,
+                "top_k": 20,
+                "top_p": 0.8,
+                "repeat_penalty": 1.1,
+                "num_ctx": 2048
             }
         }
         
@@ -130,6 +134,39 @@ class OllamaClient:
             traceback.print_exc()
             return {"response": f"Error: {str(e)}"}
     
+
+    def chat_stream(self, model=None, messages=None):
+        """Stream chat response word by word"""
+        model = model or self.default_model
+        messages = messages or []
+        url = f"{self.api_url}/api/chat"
+        payload = {
+            "model": model,
+            "messages": messages,
+            "stream": True,
+            "options": {
+                "num_predict": 180,
+                "temperature": 0.3,
+                "top_k": 20,
+                "top_p": 0.8,
+                "num_ctx": 2048
+            }
+        }
+        try:
+            response = requests.post(url, json=payload, timeout=90, stream=True)
+            full_response = ""
+            for line in response.iter_lines():
+                if line:
+                    import json as _json
+                    chunk = _json.loads(line.decode())
+                    if "message" in chunk:
+                        token = chunk["message"].get("content", "")
+                        full_response += token
+                    if chunk.get("done", False):
+                        break
+            return {"response": full_response}
+        except Exception as e:
+            return {"response": f"Error: {str(e)}"}
     def list_models(self):
         """
         List available models
