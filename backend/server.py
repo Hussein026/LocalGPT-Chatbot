@@ -98,6 +98,11 @@ class ChatHandler(http.server.BaseHTTPRequestHandler):
             except FileNotFoundError:
                 return self._send_json({"error": "Frontend not found"}, 404)
 
+        if path == "/patients":
+            return self._handle_patients()
+        if path.startswith("/patients/") and path.endswith("/visits"):
+            pid = path.split("/")[2]
+            return self._handle_patient_visits(pid)
         if path == "/admin/feedback":
             return self._handle_admin_feedback()
         if path == "/admin.html":
@@ -165,6 +170,11 @@ class ChatHandler(http.server.BaseHTTPRequestHandler):
                 return
         if path == "/admin/feedback":
             return self._handle_admin_feedback()
+        if path == "/patients":
+            return self._handle_patients()
+        if path.startswith("/patients/") and path.endswith("/visits"):
+            pid = path.split("/")[2]
+            return self._handle_patient_visits(pid)
         if path == "/auth/send-code":
             return self._handle_send_code()
         if path == "/auth/verify-code":
@@ -238,6 +248,65 @@ class ChatHandler(http.server.BaseHTTPRequestHandler):
             return self._send_json({"feedback": feedback})
         except Exception as e:
             return self._send_json({"feedback": []})
+
+    def _handle_patients(self):
+        try:
+            import json as _json, sqlite3, uuid
+            from datetime import datetime
+            auth = self.headers.get("Authorization","")
+            token = auth.replace("Bearer ","")
+            import auth as _auth
+            payload = _auth.verify_token(token)
+            if not payload:
+                return self._send_json({"error":"Unauthorized"}, 401)
+            doctor_id = payload.get("user_id")
+
+            if self.command == "GET":
+                conn = sqlite3.connect("/root/LocalGPT-Chatbot/backend/chat_data.db")
+                conn.row_factory = sqlite3.Row
+                rows = conn.execute("SELECT * FROM patients WHERE doctor_id=? ORDER BY created_at DESC", (doctor_id,)).fetchall()
+                conn.close()
+                return self._send_json({"patients": [dict(r) for r in rows]})
+
+            elif self.command == "POST":
+                length = int(self.headers.get("Content-Length", 0))
+                data = _json.loads(self.rfile.read(length).decode())
+                pid = str(uuid.uuid4())
+                now = datetime.now().isoformat()
+                conn = sqlite3.connect("/root/LocalGPT-Chatbot/backend/chat_data.db")
+                conn.execute("INSERT INTO patients (id,doctor_id,name,age,gender,diagnosis_date,notes,created_at) VALUES (?,?,?,?,?,?,?,?)",
+                    (pid, doctor_id, data.get("name",""), data.get("age",0), data.get("gender",""), data.get("diagnosis_date",""), data.get("notes",""), now))
+                conn.commit()
+                conn.close()
+                return self._send_json({"id": pid, "ok": True})
+        except Exception as e:
+            return self._send_json({"error": str(e)}, 500)
+
+    def _handle_patient_visits(self, patient_id):
+        try:
+            import json as _json, sqlite3, uuid
+            from datetime import datetime
+
+            if self.command == "GET":
+                conn = sqlite3.connect("/root/LocalGPT-Chatbot/backend/chat_data.db")
+                conn.row_factory = sqlite3.Row
+                rows = conn.execute("SELECT * FROM patient_visits WHERE patient_id=? ORDER BY visit_date DESC", (patient_id,)).fetchall()
+                conn.close()
+                return self._send_json({"visits": [dict(r) for r in rows]})
+
+            elif self.command == "POST":
+                length = int(self.headers.get("Content-Length", 0))
+                data = _json.loads(self.rfile.read(length).decode())
+                vid = str(uuid.uuid4())
+                now = datetime.now().isoformat()
+                conn = sqlite3.connect("/root/LocalGPT-Chatbot/backend/chat_data.db")
+                conn.execute("INSERT INTO patient_visits (id,patient_id,visit_date,mmse_score,moca_score,notes,symptoms,created_at) VALUES (?,?,?,?,?,?,?,?)",
+                    (vid, patient_id, data.get("visit_date", now[:10]), data.get("mmse_score"), data.get("moca_score"), data.get("notes",""), data.get("symptoms",""), now))
+                conn.commit()
+                conn.close()
+                return self._send_json({"id": vid, "ok": True})
+        except Exception as e:
+            return self._send_json({"error": str(e)}, 500)
 
     def _handle_send_code(self):
         try:

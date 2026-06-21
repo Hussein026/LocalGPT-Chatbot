@@ -187,6 +187,12 @@ header{padding:12px 14px}
         <span style="color:var(--accent);font-family:'IBM Plex Mono',monospace;font-size:10px">03</span>&nbsp;&nbsp;Treatment options
       </button>
     </div>
+    <div class="sidebar-section">Patient tracker</div>
+    <div style="padding:4px 12px 8px">
+      <button onclick="openPatientTracker()" style="width:100%;padding:9px 10px;margin-bottom:4px;background:transparent;border:1px solid var(--border);border-radius:7px;color:var(--text2);font-size:12px;font-family:Sora,sans-serif;cursor:pointer;text-align:left;transition:all 0.15s" onmouseover="this.style.background='var(--bg3)';this.style.color='var(--text)'" onmouseout="this.style.background='transparent';this.style.color='var(--text2)'">
+        <span style="color:#34d399;font-family:'IBM Plex Mono',monospace;font-size:10px">👤</span>&nbsp;&nbsp;My patients
+      </button>
+    </div>
     <div class="sidebar-section">Your conversations</div>
     <div class="sessions-list" id="sessionsList"></div>
     <div class="sidebar-footer">
@@ -355,6 +361,136 @@ async function submitAuth(){
     showApp();
   }catch(e){errEl.textContent="Connection error. Please try again.";errEl.classList.add("show");btn.disabled=false;btn.textContent=currentTab==="login"?"Sign in":"Create account"}
 }
+function openPatientTracker(){
+  const chat = document.getElementById("chat");
+  chat.innerHTML = `
+  <div style="padding:24px;max-width:700px;margin:0 auto">
+    <h2 style="font-size:18px;font-weight:600;margin-bottom:4px">Patient Tracker</h2>
+    <p style="color:var(--text2);font-size:13px;margin-bottom:20px">Track cognitive scores and visit notes over time</p>
+    <button onclick="showAddPatient()" style="padding:8px 16px;background:var(--accent);border:none;border-radius:8px;color:#fff;font-family:Sora,sans-serif;font-size:13px;cursor:pointer;margin-bottom:20px">+ Add Patient</button>
+    <div id="addPatientForm" style="display:none;background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:20px">
+      <h3 style="font-size:14px;margin-bottom:16px">New Patient</h3>
+      <input id="pName" placeholder="Patient name" style="width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:Sora,sans-serif;font-size:13px;margin-bottom:10px">
+      <div style="display:flex;gap:10px;margin-bottom:10px">
+        <input id="pAge" type="number" placeholder="Age" style="width:80px;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:Sora,sans-serif;font-size:13px">
+        <select id="pGender" style="padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:Sora,sans-serif;font-size:13px">
+          <option>Male</option><option>Female</option><option>Other</option>
+        </select>
+        <input id="pDiagDate" type="date" style="padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:Sora,sans-serif;font-size:13px">
+      </div>
+      <textarea id="pNotes" placeholder="Initial notes..." rows="2" style="width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:Sora,sans-serif;font-size:13px;resize:none;margin-bottom:10px"></textarea>
+      <button onclick="savePatient()" style="padding:8px 16px;background:var(--accent);border:none;border-radius:8px;color:#fff;font-family:Sora,sans-serif;font-size:13px;cursor:pointer">Save Patient</button>
+    </div>
+    <div id="patientList">Loading...</div>
+  </div>`;
+  loadPatients();
+}
+
+function showAddPatient(){
+  const f = document.getElementById("addPatientForm");
+  f.style.display = f.style.display==="none" ? "block" : "none";
+}
+
+async function savePatient(){
+  const data = {
+    name: document.getElementById("pName").value,
+    age: parseInt(document.getElementById("pAge").value)||0,
+    gender: document.getElementById("pGender").value,
+    diagnosis_date: document.getElementById("pDiagDate").value,
+    notes: document.getElementById("pNotes").value
+  };
+  await fetch("/patients",{method:"POST",headers:{...authHeaders(),"Content-Type":"application/json"},body:JSON.stringify(data)});
+  document.getElementById("addPatientForm").style.display="none";
+  loadPatients();
+}
+
+async function loadPatients(){
+  const res = await fetch("/patients",{headers:authHeaders()});
+  const data = await res.json();
+  const list = document.getElementById("patientList");
+  if(!list) return;
+  if(!data.patients||!data.patients.length){
+    list.innerHTML="<p style='color:var(--text2);font-size:13px'>No patients yet. Add your first patient above.</p>";
+    return;
+  }
+  list.innerHTML = data.patients.map(p=>`
+    <div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:10px;cursor:pointer" onclick="openPatient('${p.id}','${p.name}')">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-weight:600;font-size:14px">${p.name}</div>
+          <div style="color:var(--text2);font-size:12px;margin-top:2px">${p.age} years · ${p.gender} · Diagnosed: ${p.diagnosis_date||"unknown"}</div>
+        </div>
+        <span style="color:var(--accent);font-size:12px">View →</span>
+      </div>
+    </div>
+  `).join("");
+}
+
+async function openPatient(pid, pname){
+  const chat = document.getElementById("chat");
+  chat.innerHTML = `
+  <div style="padding:24px;max-width:700px;margin:0 auto">
+    <button onclick="openPatientTracker()" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:13px;margin-bottom:16px">← Back to patients</button>
+    <h2 style="font-size:18px;font-weight:600;margin-bottom:20px">${pname}</h2>
+    <button onclick="showAddVisit('${pid}')" style="padding:8px 16px;background:var(--accent);border:none;border-radius:8px;color:#fff;font-family:Sora,sans-serif;font-size:13px;cursor:pointer;margin-bottom:20px">+ Add Visit</button>
+    <div id="addVisitForm" style="display:none;background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:20px">
+      <h3 style="font-size:14px;margin-bottom:16px">New Visit</h3>
+      <div style="display:flex;gap:10px;margin-bottom:10px">
+        <input id="vDate" type="date" style="padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:Sora,sans-serif;font-size:13px">
+        <input id="vMMSE" type="number" min="0" max="30" placeholder="MMSE (0-30)" style="width:130px;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:Sora,sans-serif;font-size:13px">
+        <input id="vMoCA" type="number" min="0" max="30" placeholder="MoCA (0-30)" style="width:130px;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:Sora,sans-serif;font-size:13px">
+      </div>
+      <textarea id="vSymptoms" placeholder="Symptoms observed..." rows="2" style="width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:Sora,sans-serif;font-size:13px;resize:none;margin-bottom:10px"></textarea>
+      <textarea id="vNotes" placeholder="Visit notes..." rows="2" style="width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:Sora,sans-serif;font-size:13px;resize:none;margin-bottom:10px"></textarea>
+      <button onclick="saveVisit('${pid}')" style="padding:8px 16px;background:var(--accent);border:none;border-radius:8px;color:#fff;font-family:Sora,sans-serif;font-size:13px;cursor:pointer">Save Visit</button>
+    </div>
+    <div id="visitList">Loading...</div>
+  </div>`;
+  loadVisits(pid);
+}
+
+function showAddVisit(pid){
+  const f = document.getElementById("addVisitForm");
+  f.style.display = f.style.display==="none" ? "block" : "none";
+}
+
+async function saveVisit(pid){
+  const data = {
+    visit_date: document.getElementById("vDate").value,
+    mmse_score: parseInt(document.getElementById("vMMSE").value)||null,
+    moca_score: parseInt(document.getElementById("vMoCA").value)||null,
+    symptoms: document.getElementById("vSymptoms").value,
+    notes: document.getElementById("vNotes").value
+  };
+  await fetch("/patients/"+pid+"/visits",{method:"POST",headers:{...authHeaders(),"Content-Type":"application/json"},body:JSON.stringify(data)});
+  document.getElementById("addVisitForm").style.display="none";
+  loadVisits(pid);
+}
+
+async function loadVisits(pid){
+  const res = await fetch("/patients/"+pid+"/visits",{headers:authHeaders()});
+  const data = await res.json();
+  const list = document.getElementById("visitList");
+  if(!list) return;
+  if(!data.visits||!data.visits.length){
+    list.innerHTML="<p style='color:var(--text2);font-size:13px'>No visits yet.</p>";
+    return;
+  }
+  list.innerHTML = "<h3 style='font-size:14px;margin-bottom:12px;color:var(--text2)'>Visit History</h3>" + data.visits.map(v=>`
+    <div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+        <span style="font-weight:600;font-size:13px">${v.visit_date}</span>
+        <div style="display:flex;gap:12px">
+          ${v.mmse_score!=null?`<span style="font-size:12px;color:var(--accent)">MMSE: <b>${v.mmse_score}/30</b></span>`:""}
+          ${v.moca_score!=null?`<span style="font-size:12px;color:#a78bfa">MoCA: <b>${v.moca_score}/30</b></span>`:""}
+        </div>
+      </div>
+      ${v.symptoms?`<div style="font-size:12px;color:var(--text2);margin-bottom:4px">Symptoms: ${v.symptoms}</div>`:""}
+      ${v.notes?`<div style="font-size:12px;color:var(--text2)">Notes: ${v.notes}</div>`:""}
+    </div>
+  `).join("");
+}
+
 function toggleSidebar(){
   const sidebar = document.getElementById("sidebar");
   const overlay = document.getElementById("sidebarOverlay");
