@@ -157,7 +157,14 @@ header{padding:12px 14px}
     </div>
     <div class="auth-field"><label>EMAIL ADDRESS</label><input type="email" id="authEmail" placeholder="you@example.com" onkeydown="authKeyPress(event)"></div>
     <div class="auth-field"><label>PASSWORD</label><input type="password" id="authPassword" placeholder="Min. 6 characters" onkeydown="authKeyPress(event)"></div>
-    <button class="auth-btn" id="authBtn" onclick="submitAuth()">Sign in</button>
+    <div id="verifyCodeBox" style="display:none;margin-bottom:16px">
+  <div class="auth-field">
+    <label>VERIFICATION CODE</label>
+    <input type="text" id="verifyCode" placeholder="Enter 6-digit code from your email" maxlength="6">
+  </div>
+  <div style="font-size:12px;color:var(--text2);margin-top:4px">Check your email inbox for the code</div>
+</div>
+<button class="auth-btn" id="authBtn" onclick="submitAuth()">Sign in</button>
     <div class="auth-footer">For medical professionals only · Your data stays private</div>
   </div>
 </div>
@@ -289,7 +296,42 @@ function showAuth(){document.getElementById("authScreen").style.display="flex";d
 function showApp(){document.getElementById("authScreen").style.display="none";document.getElementById("appScreen").classList.add("show");document.getElementById("userEmail").textContent=currentUser.email;document.getElementById("userAvatar").textContent=currentUser.email[0].toUpperCase();loadSessions();checkHealth();setTimeout(()=>document.getElementById("message").focus(),100)}
 function switchTab(tab){currentTab=tab;document.querySelectorAll(".auth-tab").forEach((t,i)=>t.classList.toggle("active",(i===0&&tab==="login")||(i===1&&tab==="register")));document.getElementById("authBtn").textContent=tab==="login"?"Sign in":"Create doctor account";document.getElementById("authError").classList.remove("show");document.getElementById("registerFields").style.display=tab==="register"?"block":"none"}
 function authKeyPress(e){if(e.key==="Enter")submitAuth()}
+async function verifyEmailCode(){
+  const email = document.getElementById("authEmail").value;
+  const code = document.getElementById("verifyCode").value;
+  const btn = document.getElementById("authBtn");
+  const errEl = document.getElementById("authError");
+  btn.disabled=true;
+  btn.textContent="Verifying...";
+  const res = await fetch("/auth/verify-code",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email,code})});
+  const data = await res.json();
+  if(data.error){
+    errEl.textContent=data.error;
+    errEl.classList.add("show");
+    btn.disabled=false;
+    btn.textContent="Verify Email";
+    return;
+  }
+  // Login after verification
+  const loginRes = await fetch("/auth/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email,password:document.getElementById("authPassword").value})});
+  const loginData = await loginRes.json();
+  authToken=loginData.token;
+  currentUser={user_id:loginData.user_id,email:loginData.email};
+  localStorage.setItem("lgpt_token",authToken);
+  localStorage.setItem("lgpt_user",JSON.stringify(currentUser));
+  document.getElementById("authScreen").style.display="none";
+  document.getElementById("appScreen").style.display="flex";
+  initApp();
+}
+
 async function submitAuth(){
+  if(currentTab==="register"){
+    // Check if we are in verification step
+    const codeBox = document.getElementById("verifyCodeBox");
+    if(codeBox && codeBox.style.display !== "none"){
+      return verifyEmailCode();
+    }
+  }
   const email=document.getElementById("authEmail").value.trim();
   const password=document.getElementById("authPassword").value;
   const errEl=document.getElementById("authError");
@@ -300,6 +342,14 @@ async function submitAuth(){
     const res=await fetch(endpoint,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email,password,full_name:document.getElementById("authFullName")?.value||"",specialty:document.getElementById("authSpecialty")?.value||"",license_number:document.getElementById("authLicense")?.value||"",institution:document.getElementById("authInstitution")?.value||""})});
     const data=await res.json();
     if(data.error){errEl.textContent=data.error;errEl.classList.add("show");btn.disabled=false;btn.textContent=currentTab==="login"?"Sign in":"Create account";return}
+    if(currentTab==="register" && !data.error){
+      // Show verification step
+      document.getElementById("verifyCodeBox").style.display="block";
+      document.getElementById("authBtn").textContent="Verify Email";
+      document.getElementById("authError").classList.remove("show");
+      btn.disabled=false;
+      return;
+    }
     authToken=data.token;currentUser={user_id:data.user_id,email:data.email};
     localStorage.setItem("lgpt_token",authToken);localStorage.setItem("lgpt_user",JSON.stringify(currentUser));
     showApp();

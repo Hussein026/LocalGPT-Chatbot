@@ -165,6 +165,10 @@ class ChatHandler(http.server.BaseHTTPRequestHandler):
                 return
         if path == "/admin/feedback":
             return self._handle_admin_feedback()
+        if path == "/auth/send-code":
+            return self._handle_send_code()
+        if path == "/auth/verify-code":
+            return self._handle_verify_code()
         if path == "/feedback":
             return self._handle_feedback()
         if path == "/auth/login":
@@ -234,6 +238,38 @@ class ChatHandler(http.server.BaseHTTPRequestHandler):
             return self._send_json({"feedback": feedback})
         except Exception as e:
             return self._send_json({"feedback": []})
+
+    def _handle_send_code(self):
+        try:
+            import json as _json, email_verification as ev
+            length = int(self.headers.get("Content-Length", 0))
+            data = _json.loads(self.rfile.read(length).decode())
+            email = data.get("email", "")
+            full_name = data.get("full_name", "Doctor")
+            code = ev.generate_code()
+            ev.save_verification_code(email, code)
+            sent = ev.send_verification_email(email, code, full_name)
+            if sent:
+                return self._send_json({"ok": True, "message": "Verification code sent"})
+            else:
+                return self._send_json({"error": "Failed to send email"}, 500)
+        except Exception as e:
+            return self._send_json({"error": str(e)}, 500)
+
+    def _handle_verify_code(self):
+        try:
+            import json as _json, email_verification as ev
+            length = int(self.headers.get("Content-Length", 0))
+            data = _json.loads(self.rfile.read(length).decode())
+            email = data.get("email", "")
+            code = data.get("code", "")
+            ok, msg = ev.verify_code(email, code)
+            if ok:
+                return self._send_json({"ok": True})
+            else:
+                return self._send_json({"error": msg}, 400)
+        except Exception as e:
+            return self._send_json({"error": str(e)}, 500)
 
     def _handle_feedback(self):
         try:
