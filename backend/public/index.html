@@ -33,7 +33,7 @@ body{background:var(--bg);color:var(--text);font-family:"Sora",sans-serif;min-he
 .auth-footer{text-align:center;margin-top:20px;font-size:12px;color:var(--text3);font-family:"IBM Plex Mono",monospace}
 .app-screen{display:none;height:100vh;overflow:hidden;flex-direction:row}
 .app-screen.show{display:flex}
-.sidebar{width:270px;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0}
+.sidebar{width:270px;overflow-y:auto;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0}
 .sidebar-top{padding:18px 16px 14px;border-bottom:1px solid var(--border)}
 .app-brand{display:flex;align-items:center;gap:10px;margin-bottom:14px}
 .brand-icon{width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-size:16px}
@@ -185,6 +185,18 @@ header{padding:12px 14px}
       </button>
       <button onclick="openTab('treatment')" style="width:100%;padding:9px 10px;margin-bottom:4px;background:transparent;border:1px solid var(--border);border-radius:7px;color:var(--text2);font-size:12px;font-family:Sora,sans-serif;cursor:pointer;text-align:left;transition:all 0.15s" onmouseover="this.style.background='var(--bg3)';this.style.color='var(--text)'" onmouseout="this.style.background='transparent';this.style.color='var(--text2)'">
         <span style="color:var(--accent);font-family:'IBM Plex Mono',monospace;font-size:10px">03</span>&nbsp;&nbsp;Treatment options
+      </button>
+    </div>
+    <div class="sidebar-section">Medications</div>
+    <div style="padding:4px 12px 8px">
+      <button onclick="openMedications()" style="width:100%;padding:9px 10px;margin-bottom:4px;background:transparent;border:1px solid var(--border);border-radius:7px;color:var(--text2);font-size:12px;font-family:Sora,sans-serif;cursor:pointer;text-align:left;transition:all 0.15s" onmouseover="this.style.background='var(--bg3)';this.style.color='var(--text)'" onmouseout="this.style.background='transparent';this.style.color='var(--text2)'">
+        <span style="color:#34d399;font-size:10px">💊</span>&nbsp;&nbsp;Medication reminders
+      </button>
+    </div>
+    <div class="sidebar-section">Appointments</div>
+    <div style="padding:4px 12px 8px">
+      <button onclick="openAppointments()" style="width:100%;padding:9px 10px;margin-bottom:4px;background:transparent;border:1px solid var(--border);border-radius:7px;color:var(--text2);font-size:12px;font-family:Sora,sans-serif;cursor:pointer;text-align:left;transition:all 0.15s" onmouseover="this.style.background='var(--bg3)';this.style.color='var(--text)'" onmouseout="this.style.background='transparent';this.style.color='var(--text2)'">
+        <span style="color:#fbbf24;font-size:10px">📅</span>&nbsp;&nbsp;Manage appointments
       </button>
     </div>
     <div class="sidebar-section">Patient tracker</div>
@@ -362,6 +374,242 @@ async function submitAuth(){
     showApp();
   }catch(e){errEl.textContent="Connection error. Please try again.";errEl.classList.add("show");btn.disabled=false;btn.textContent=currentTab==="login"?"Sign in":"Create account"}
 }
+function openMedications(){
+  const chat = document.getElementById("chat");
+  chat.innerHTML = `
+  <div style="padding:24px;max-width:700px;margin:0 auto">
+    <h2 style="font-size:18px;font-weight:600;margin-bottom:4px">Medication Reminders</h2>
+    <p style="color:var(--text2);font-size:13px;margin-bottom:20px">Set daily email reminders for patient medications</p>
+    <button onclick="showAddMedication()" style="padding:8px 16px;background:var(--accent);border:none;border-radius:8px;color:#fff;font-family:Sora,sans-serif;font-size:13px;cursor:pointer;margin-bottom:20px">+ Add Reminder</button>
+    <div id="addMedForm" style="display:none;background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:20px">
+      <h3 style="font-size:14px;margin-bottom:16px">New Medication Reminder</h3>
+      <input id="medPatient" placeholder="Patient name" style="width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:Sora,sans-serif;font-size:13px;margin-bottom:10px">
+      <input id="medEmail" type="email" placeholder="Patient email" style="width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:Sora,sans-serif;font-size:13px;margin-bottom:10px">
+      <input id="medName" placeholder="Medication name (e.g. Donepezil)" style="width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:Sora,sans-serif;font-size:13px;margin-bottom:10px">
+      <div style="display:flex;gap:10px;margin-bottom:10px">
+        <input id="medDosage" placeholder="Dosage (e.g. 10mg)" style="flex:1;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:Sora,sans-serif;font-size:13px">
+        <select id="medFreq" style="flex:1;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:Sora,sans-serif;font-size:13px">
+          <option>Once daily</option><option>Twice daily</option><option>Three times daily</option><option>Weekly</option>
+        </select>
+      </div>
+      <div style="margin-bottom:10px">
+        <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px">REMINDER TIME</label>
+        <input id="medTime" type="time" style="padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:Sora,sans-serif;font-size:13px">
+      </div>
+      <textarea id="medNotes" placeholder="Notes..." rows="2" style="width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:Sora,sans-serif;font-size:13px;resize:none;margin-bottom:10px"></textarea>
+      <button onclick="saveMedication()" style="padding:8px 16px;background:var(--accent);border:none;border-radius:8px;color:#fff;font-family:Sora,sans-serif;font-size:13px;cursor:pointer">Save Reminder</button>
+    </div>
+    <div id="medList">Loading...</div>
+  </div>`;
+  loadMedications();
+}
+
+function showAddMedication(){
+  const f = document.getElementById("addMedForm");
+  f.style.display = f.style.display==="none" ? "block" : "none";
+}
+
+async function saveMedication(){
+  const data = {
+    patient_name: document.getElementById("medPatient").value,
+    patient_email: document.getElementById("medEmail").value,
+    medication_name: document.getElementById("medName").value,
+    dosage: document.getElementById("medDosage").value,
+    frequency: document.getElementById("medFreq").value,
+    reminder_time: document.getElementById("medTime").value,
+    notes: document.getElementById("medNotes").value
+  };
+  await fetch("/medications",{method:"POST",headers:{...authHeaders(),"Content-Type":"application/json"},body:JSON.stringify(data)});
+  document.getElementById("addMedForm").style.display="none";
+  loadMedications();
+}
+
+async function loadMedications(){
+  const res = await fetch("/medications",{headers:authHeaders()});
+  const data = await res.json();
+  const list = document.getElementById("medList");
+  if(!list) return;
+  if(!data.medications||!data.medications.length){
+    list.innerHTML="<p style='color:var(--text2);font-size:13px'>No reminders set yet.</p>";
+    return;
+  }
+  list.innerHTML = data.medications.map(m=>`
+    <div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-weight:600;font-size:14px">💊 ${m.medication_name} — ${m.dosage}</div>
+          <div style="color:var(--text2);font-size:12px;margin-top:2px">Patient: ${m.patient_name}</div>
+          <div style="color:var(--text2);font-size:12px">${m.frequency} · Reminder at ${m.reminder_time}</div>
+          ${m.patient_email?`<div style="color:var(--text2);font-size:12px">✉️ ${m.patient_email}</div>`:""}
+        </div>
+        <button onclick="deleteMedication('${m.id}')" style="padding:4px 10px;background:none;border:1px solid var(--danger);border-radius:6px;color:var(--danger);font-size:11px;cursor:pointer;font-family:Sora,sans-serif">Remove</button>
+      </div>
+    </div>
+  `).join("");
+}
+
+async function deleteMedication(id){
+  if(!confirm("Remove this reminder?")) return;
+  await fetch("/medications",{method:"DELETE",headers:{...authHeaders(),"Content-Type":"application/json"},body:JSON.stringify({id})});
+  loadMedications();
+}
+
+function openMedications(){
+  const chat = document.getElementById("chat");
+  chat.innerHTML = `
+  <div style="padding:24px;max-width:700px;margin:0 auto">
+    <h2 style="font-size:18px;font-weight:600;margin-bottom:4px">Medication Reminders</h2>
+    <p style="color:var(--text2);font-size:13px;margin-bottom:20px">Set daily email reminders for patient medications</p>
+    <button onclick="showAddMedication()" style="padding:8px 16px;background:var(--accent);border:none;border-radius:8px;color:#fff;font-family:Sora,sans-serif;font-size:13px;cursor:pointer;margin-bottom:20px">+ Add Reminder</button>
+    <div id="addMedForm" style="display:none;background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:20px">
+      <h3 style="font-size:14px;margin-bottom:16px">New Medication Reminder</h3>
+      <input id="medPatient" placeholder="Patient name" style="width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:Sora,sans-serif;font-size:13px;margin-bottom:10px">
+      <input id="medEmail" type="email" placeholder="Patient email" style="width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:Sora,sans-serif;font-size:13px;margin-bottom:10px">
+      <input id="medName" placeholder="Medication name (e.g. Donepezil)" style="width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:Sora,sans-serif;font-size:13px;margin-bottom:10px">
+      <div style="display:flex;gap:10px;margin-bottom:10px">
+        <input id="medDosage" placeholder="Dosage (e.g. 10mg)" style="flex:1;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:Sora,sans-serif;font-size:13px">
+        <select id="medFreq" style="flex:1;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:Sora,sans-serif;font-size:13px">
+          <option>Once daily</option><option>Twice daily</option><option>Three times daily</option><option>Weekly</option>
+        </select>
+      </div>
+      <div style="margin-bottom:10px">
+        <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px">REMINDER TIME</label>
+        <input id="medTime" type="time" style="padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:Sora,sans-serif;font-size:13px">
+      </div>
+      <textarea id="medNotes" placeholder="Notes..." rows="2" style="width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:Sora,sans-serif;font-size:13px;resize:none;margin-bottom:10px"></textarea>
+      <button onclick="saveMedication()" style="padding:8px 16px;background:var(--accent);border:none;border-radius:8px;color:#fff;font-family:Sora,sans-serif;font-size:13px;cursor:pointer">Save Reminder</button>
+    </div>
+    <div id="medList">Loading...</div>
+  </div>`;
+  loadMedications();
+}
+
+function showAddMedication(){
+  const f = document.getElementById("addMedForm");
+  f.style.display = f.style.display==="none" ? "block" : "none";
+}
+
+async function saveMedication(){
+  const data = {
+    patient_name: document.getElementById("medPatient").value,
+    patient_email: document.getElementById("medEmail").value,
+    medication_name: document.getElementById("medName").value,
+    dosage: document.getElementById("medDosage").value,
+    frequency: document.getElementById("medFreq").value,
+    reminder_time: document.getElementById("medTime").value,
+    notes: document.getElementById("medNotes").value
+  };
+  await fetch("/medications",{method:"POST",headers:{...authHeaders(),"Content-Type":"application/json"},body:JSON.stringify(data)});
+  document.getElementById("addMedForm").style.display="none";
+  loadMedications();
+}
+
+async function loadMedications(){
+  const res = await fetch("/medications",{headers:authHeaders()});
+  const data = await res.json();
+  const list = document.getElementById("medList");
+  if(!list) return;
+  if(!data.medications||!data.medications.length){
+    list.innerHTML="<p style='color:var(--text2);font-size:13px'>No reminders set yet.</p>";
+    return;
+  }
+  list.innerHTML = data.medications.map(m=>`
+    <div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-weight:600;font-size:14px">💊 ${m.medication_name} — ${m.dosage}</div>
+          <div style="color:var(--text2);font-size:12px;margin-top:2px">Patient: ${m.patient_name}</div>
+          <div style="color:var(--text2);font-size:12px">${m.frequency} · Reminder at ${m.reminder_time}</div>
+          ${m.patient_email?`<div style="color:var(--text2);font-size:12px">✉️ ${m.patient_email}</div>`:""}
+        </div>
+        <button onclick="deleteMedication('${m.id}')" style="padding:4px 10px;background:none;border:1px solid var(--danger);border-radius:6px;color:var(--danger);font-size:11px;cursor:pointer;font-family:Sora,sans-serif">Remove</button>
+      </div>
+    </div>
+  `).join("");
+}
+
+async function deleteMedication(id){
+  if(!confirm("Remove this reminder?")) return;
+  await fetch("/medications",{method:"DELETE",headers:{...authHeaders(),"Content-Type":"application/json"},body:JSON.stringify({id})});
+  loadMedications();
+}
+
+function openAppointments(){
+  const chat = document.getElementById("chat");
+  chat.innerHTML = `
+  <div style="padding:24px;max-width:700px;margin:0 auto">
+    <h2 style="font-size:18px;font-weight:600;margin-bottom:4px">Appointments</h2>
+    <p style="color:var(--text2);font-size:13px;margin-bottom:20px">Schedule and manage patient appointments</p>
+    <button onclick="showAddAppointment()" style="padding:8px 16px;background:var(--accent);border:none;border-radius:8px;color:#fff;font-family:Sora,sans-serif;font-size:13px;cursor:pointer;margin-bottom:20px">+ New Appointment</button>
+    <div id="addAppointmentForm" style="display:none;background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:20px">
+      <h3 style="font-size:14px;margin-bottom:16px">New Appointment</h3>
+      <input id="apName" placeholder="Patient name" style="width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:Sora,sans-serif;font-size:13px;margin-bottom:10px">
+      <input id="apEmail" type="email" placeholder="Patient email (for confirmation)" style="width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:Sora,sans-serif;font-size:13px;margin-bottom:10px">
+      <div style="display:flex;gap:10px;margin-bottom:10px">
+        <input id="apDate" type="date" style="flex:1;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:Sora,sans-serif;font-size:13px">
+        <input id="apTime" type="time" style="flex:1;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:Sora,sans-serif;font-size:13px">
+      </div>
+      <textarea id="apNotes" placeholder="Notes..." rows="2" style="width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:Sora,sans-serif;font-size:13px;resize:none;margin-bottom:10px"></textarea>
+      <button onclick="saveAppointment()" style="padding:8px 16px;background:var(--accent);border:none;border-radius:8px;color:#fff;font-family:Sora,sans-serif;font-size:13px;cursor:pointer">Save & Send Confirmation</button>
+    </div>
+    <div id="appointmentList">Loading...</div>
+  </div>`;
+  loadAppointments();
+}
+
+function showAddAppointment(){
+  const f = document.getElementById("addAppointmentForm");
+  f.style.display = f.style.display==="none" ? "block" : "none";
+}
+
+async function saveAppointment(){
+  const data = {
+    patient_name: document.getElementById("apName").value,
+    patient_email: document.getElementById("apEmail").value,
+    date: document.getElementById("apDate").value,
+    time: document.getElementById("apTime").value,
+    notes: document.getElementById("apNotes").value
+  };
+  const res = await fetch("/appointments",{method:"POST",headers:{...authHeaders(),"Content-Type":"application/json"},body:JSON.stringify(data)});
+  const result = await res.json();
+  if(result.ok){
+    document.getElementById("addAppointmentForm").style.display="none";
+    loadAppointments();
+  }
+}
+
+async function loadAppointments(){
+  const res = await fetch("/appointments",{headers:authHeaders()});
+  const data = await res.json();
+  const list = document.getElementById("appointmentList");
+  if(!list) return;
+  if(!data.appointments||!data.appointments.length){
+    list.innerHTML="<p style='color:var(--text2);font-size:13px'>No appointments yet.</p>";
+    return;
+  }
+  const confirmed = data.appointments.filter(a=>a.status!=="cancelled");
+  const cancelled = data.appointments.filter(a=>a.status==="cancelled");
+  list.innerHTML = confirmed.map(a=>`
+    <div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-weight:600;font-size:14px">${a.patient_name}</div>
+          <div style="color:var(--text2);font-size:12px;margin-top:2px">📅 ${a.date} at ${a.time}</div>
+          ${a.patient_email?`<div style="color:var(--text2);font-size:12px">✉️ ${a.patient_email}</div>`:""}
+          ${a.notes?`<div style="color:var(--text2);font-size:12px;margin-top:4px">${a.notes}</div>`:""}
+        </div>
+        <button onclick="cancelAppointment('${a.id}')" style="padding:4px 10px;background:none;border:1px solid var(--danger);border-radius:6px;color:var(--danger);font-size:11px;cursor:pointer;font-family:Sora,sans-serif">Cancel</button>
+      </div>
+    </div>
+  `).join("");
+}
+
+async function cancelAppointment(id){
+  if(!confirm("Cancel this appointment?")) return;
+  await fetch("/appointments",{method:"DELETE",headers:{...authHeaders(),"Content-Type":"application/json"},body:JSON.stringify({id})});
+  loadAppointments();
+}
+
 function openPatientTracker(){
   const chat = document.getElementById("chat");
   chat.innerHTML = `

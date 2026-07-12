@@ -98,6 +98,10 @@ class ChatHandler(http.server.BaseHTTPRequestHandler):
             except FileNotFoundError:
                 return self._send_json({"error": "Frontend not found"}, 404)
 
+        if path == "/medications":
+            return self._handle_medications()
+        if path == "/appointments":
+            return self._handle_appointments()
         if path == "/patients":
             return self._handle_patients()
         if path.startswith("/patients/") and path.endswith("/visits"):
@@ -170,6 +174,10 @@ class ChatHandler(http.server.BaseHTTPRequestHandler):
                 return
         if path == "/admin/feedback":
             return self._handle_admin_feedback()
+        if path == "/medications":
+            return self._handle_medications()
+        if path == "/appointments":
+            return self._handle_appointments()
         if path == "/patients":
             return self._handle_patients()
         if path.startswith("/patients/") and path.endswith("/visits"):
@@ -248,6 +256,119 @@ class ChatHandler(http.server.BaseHTTPRequestHandler):
             return self._send_json({"feedback": feedback})
         except Exception as e:
             return self._send_json({"feedback": []})
+
+    def _handle_medications(self):
+        try:
+            import json as _json, sqlite3, uuid
+            from datetime import datetime
+            import auth as _auth
+            token = self.headers.get("Authorization","").replace("Bearer ","")
+            payload = _auth.verify_token(token)
+            if not payload:
+                return self._send_json({"error":"Unauthorized"}, 401)
+            doctor_id = payload.get("user_id")
+            if self.command == "GET":
+                conn = sqlite3.connect("/root/LocalGPT-Chatbot/backend/chat_data.db")
+                conn.row_factory = sqlite3.Row
+                rows = conn.execute("SELECT * FROM medications WHERE doctor_id=? AND active=1 ORDER BY created_at DESC", (doctor_id,)).fetchall()
+                conn.close()
+                return self._send_json({"medications": [dict(r) for r in rows]})
+            elif self.command == "POST":
+                length = int(self.headers.get("Content-Length", 0))
+                data = _json.loads(self.rfile.read(length).decode())
+                mid = str(uuid.uuid4())
+                now = datetime.now().isoformat()
+                conn = sqlite3.connect("/root/LocalGPT-Chatbot/backend/chat_data.db")
+                conn.execute("INSERT INTO medications (id,doctor_id,patient_name,patient_email,medication_name,dosage,frequency,reminder_time,notes,active,created_at) VALUES (?,?,?,?,?,?,?,?,?,1,?)",
+                    (mid, doctor_id, data.get("patient_name",""), data.get("patient_email",""), data.get("medication_name",""), data.get("dosage",""), data.get("frequency",""), data.get("reminder_time",""), data.get("notes",""), now))
+                conn.commit()
+                conn.close()
+                return self._send_json({"id": mid, "ok": True})
+            elif self.command == "DELETE":
+                length = int(self.headers.get("Content-Length", 0))
+                data = _json.loads(self.rfile.read(length).decode())
+                conn = sqlite3.connect("/root/LocalGPT-Chatbot/backend/chat_data.db")
+                conn.execute("UPDATE medications SET active=0 WHERE id=? AND doctor_id=?", (data.get("id"), doctor_id))
+                conn.commit()
+                conn.close()
+                return self._send_json({"ok": True})
+        except Exception as e:
+            return self._send_json({"error": str(e)}, 500)
+
+    def _handle_appointments(self):
+        try:
+            import json as _json, sqlite3, uuid
+            from datetime import datetime
+            import auth as _auth
+            auth_header = self.headers.get("Authorization","")
+            token = auth_header.replace("Bearer ","")
+            payload = _auth.verify_token(token)
+            if not payload:
+                return self._send_json({"error":"Unauthorized"}, 401)
+            doctor_id = payload.get("user_id")
+
+            if self.command == "GET":
+                conn = sqlite3.connect("/root/LocalGPT-Chatbot/backend/chat_data.db")
+                conn.row_factory = sqlite3.Row
+                rows = conn.execute("SELECT * FROM appointments WHERE doctor_id=? ORDER BY date ASC, time ASC", (doctor_id,)).fetchall()
+                conn.close()
+                return self._send_json({"appointments": [dict(r) for r in rows]})
+
+            elif self.command == "POST":
+                length = int(self.headers.get("Content-Length", 0))
+                data = _json.loads(self.rfile.read(length).decode())
+                aid = str(uuid.uuid4())
+                now = datetime.now().isoformat()
+                conn = sqlite3.connect("/root/LocalGPT-Chatbot/backend/chat_data.db")
+                conn.execute("INSERT INTO appointments (id,doctor_id,patient_name,patient_email,date,time,notes,status,created_at) VALUES (?,?,?,?,?,?,?,?,?)",
+                    (aid, doctor_id, data.get("patient_name",""), data.get("patient_email",""),
+                     data.get("date",""), data.get("time",""), data.get("notes",""), "confirmed", now))
+                conn.commit()
+                conn.close()
+
+                # Send confirmation email
+                try:
+                    import email_verification as ev
+                    import smtplib
+                    from email.mime.text import MIMEText
+                    from email.mime.multipart import MIMEMultipart
+                    if data.get("patient_email"):
+                        msg = MIMEMultipart()
+                        msg["From"] = ev.GMAIL_USER
+                        msg["To"] = data.get("patient_email")
+                        msg["Subject"] = "Appointment Confirmation"
+                        body = f"""Dear {data.get("patient_name","Patient")},
+
+Your appointment has been confirmed:
+
+Date: {data.get("date","")}
+Time: {data.get("time","")}
+Notes: {data.get("notes","")}
+
+Alzheimer Clinical Assistant"""
+                        msg.attach(MIMEText(body,"plain"))
+                        server = smtplib.SMTP("smtp.gmail.com",587)
+                        server.starttls()
+                        server.login(ev.GMAIL_USER, ev.GMAIL_APP_PASSWORD)
+                        server.sendmail(ev.GMAIL_USER, data.get("patient_email"), msg.as_string())
+                        server.quit()
+                except:
+                    pass
+
+                return self._send_json({"id": aid, "ok": True})
+
+            elif self.command == "DELETE":
+                length = int(self.headers.get("Content-Length", 0))
+                data = _json.loads(self.rfile.read(length).decode())
+                conn = sqlite3.connect("/root/LocalGPT-Chatbot/backend/chat_data.db")
+                conn.execute("UPDATE appointments SET status='cancelled' WHERE id=? AND doctor_id=?",
+                    (data.get("id"), doctor_id))
+                conn.commit()
+                conn.close()
+                return self._send_json({"ok": True})
+
+        except Exception as e:
+            return self._send_json({"error": str(e)}, 500)
 
     def _handle_patients(self):
         try:
@@ -1094,6 +1215,12 @@ if __name__ == "__main__":
         print("✅ Model warmed and ready")
     except Exception as e:
         print(f"⚠️ Model warm failed: {e}")
+
+    try:
+        import medication_reminder
+        medication_reminder.start_reminder_scheduler()
+    except Exception as e:
+        print(f"[WARN] Reminder: {e}")
 
     main()
 
