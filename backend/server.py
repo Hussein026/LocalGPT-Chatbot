@@ -217,7 +217,10 @@ class ChatHandler(http.server.BaseHTTPRequestHandler):
     # ----- DELETE -----
     def do_DELETE(self):
         path = urlparse(self.path).path
-
+        if path == "/appointments":
+            return self._handle_appointments()
+        if path == "/medications":
+            return self._handle_medications()
         if path.startswith("/sessions/") and path.count("/") == 2:
             return self._delete_session(path.split("/")[-1])
         if path.startswith("/indexes/") and path.count("/") == 2:
@@ -285,8 +288,11 @@ class ChatHandler(http.server.BaseHTTPRequestHandler):
                 conn.close()
                 return self._send_json({"id": mid, "ok": True})
             elif self.command == "DELETE":
-                length = int(self.headers.get("Content-Length", 0))
-                data = _json.loads(self.rfile.read(length).decode())
+                try:
+                    length = int(self.headers.get("Content-Length", 0))
+                    data = _json.loads(self.rfile.read(length).decode()) if length > 0 else {}
+                except:
+                    data = {}
                 conn = sqlite3.connect("/root/LocalGPT-Chatbot/backend/chat_data.db")
                 conn.execute("UPDATE medications SET active=0 WHERE id=? AND doctor_id=?", (data.get("id"), doctor_id))
                 conn.commit()
@@ -358,8 +364,11 @@ Alzheimer Clinical Assistant"""
                 return self._send_json({"id": aid, "ok": True})
 
             elif self.command == "DELETE":
-                length = int(self.headers.get("Content-Length", 0))
-                data = _json.loads(self.rfile.read(length).decode())
+                try:
+                    length = int(self.headers.get("Content-Length", 0))
+                    data = _json.loads(self.rfile.read(length).decode()) if length > 0 else {}
+                except:
+                    data = {}
                 conn = sqlite3.connect("/root/LocalGPT-Chatbot/backend/chat_data.db")
                 conn.execute("UPDATE appointments SET status='cancelled' WHERE id=? AND doctor_id=?",
                     (data.get("id"), doctor_id))
