@@ -187,6 +187,15 @@ header{padding:12px 14px}
         <span style="color:var(--accent);font-family:'IBM Plex Mono',monospace;font-size:10px">03</span>&nbsp;&nbsp;Treatment options
       </button>
     </div>
+    <div class="sidebar-section">Tools</div>
+    <div style="padding:4px 12px 8px">
+      <button onclick="openSymptomChecker()" style="width:100%;padding:9px 10px;margin-bottom:4px;background:transparent;border:1px solid var(--border);border-radius:7px;color:var(--text2);font-size:12px;font-family:Sora,sans-serif;cursor:pointer;text-align:left;transition:all 0.15s" onmouseover="this.style.background='var(--bg3)';this.style.color='var(--text)'" onmouseout="this.style.background='transparent';this.style.color='var(--text2)'">
+        <span style="color:#f87171;font-size:10px">🔍</span>&nbsp;&nbsp;Symptom checker
+      </button>
+      <button onclick="openCaregiverAssistant()" style="width:100%;padding:9px 10px;margin-bottom:4px;background:transparent;border:1px solid var(--border);border-radius:7px;color:var(--text2);font-size:12px;font-family:Sora,sans-serif;cursor:pointer;text-align:left;transition:all 0.15s" onmouseover="this.style.background='var(--bg3)';this.style.color='var(--text)'" onmouseout="this.style.background='transparent';this.style.color='var(--text2)'">
+        <span style="color:#fbbf24;font-size:10px">👨‍👩‍👧</span>&nbsp;&nbsp;Caregiver assistant
+      </button>
+    </div>
     <div class="sidebar-section">Medications</div>
     <div style="padding:4px 12px 8px">
       <button onclick="openMedications()" style="width:100%;padding:9px 10px;margin-bottom:4px;background:transparent;border:1px solid var(--border);border-radius:7px;color:var(--text2);font-size:12px;font-family:Sora,sans-serif;cursor:pointer;text-align:left;transition:all 0.15s" onmouseover="this.style.background='var(--bg3)';this.style.color='var(--text)'" onmouseout="this.style.background='transparent';this.style.color='var(--text2)'">
@@ -374,6 +383,132 @@ async function submitAuth(){
     showApp();
   }catch(e){errEl.textContent="Connection error. Please try again.";errEl.classList.add("show");btn.disabled=false;btn.textContent=currentTab==="login"?"Sign in":"Create account"}
 }
+function openCaregiverAssistant(){
+  const chat = document.getElementById("chat");
+  chat.innerHTML = `
+  <div style="padding:24px;max-width:700px;margin:0 auto">
+    <h2 style="font-size:18px;font-weight:600;margin-bottom:4px">Caregiver Assistant</h2>
+    <p style="color:var(--text2);font-size:13px;margin-bottom:20px">Generate simple explanations and guidance for patient families</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px">
+      ${[
+        {title:"Explain the diagnosis",prompt:"Explain Alzheimer's disease in simple terms that a patient's family member with no medical background can understand. Include what to expect and how to support their loved one."},
+        {title:"Daily care tips",prompt:"What are the most important daily care tips for a family member caring for an Alzheimer's patient at home? Keep it practical and simple."},
+        {title:"Communication guide",prompt:"How should family members communicate with an Alzheimer's patient? Give practical tips for talking, listening, and reducing confusion."},
+        {title:"Safety at home",prompt:"What home safety modifications should a family make for an Alzheimer's patient? List the most important changes to prevent accidents."},
+        {title:"Managing agitation",prompt:"How can caregivers manage agitation and aggression in Alzheimer's patients without medication? Give practical non-pharmacological strategies."},
+        {title:"Self-care for caregivers",prompt:"What advice would you give to a family member who is burning out from caring for an Alzheimer's patient? How can they take care of themselves?"}
+      ].map(item=>`
+        <div onclick="sendCaregiverPrompt(this)" data-prompt="${item.prompt}" style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px;cursor:pointer;transition:border-color 0.2s" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+          <div style="font-size:13px;font-weight:500;color:var(--text)">${item.title}</div>
+        </div>
+      `).join("")}
+    </div>
+    <div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:16px">
+      <label style="font-size:11px;color:var(--text2);display:block;margin-bottom:8px">OR ASK YOUR OWN QUESTION</label>
+      <div style="display:flex;gap:8px">
+        <input id="caregiverQ" placeholder="e.g. How do I handle sundowning?" style="flex:1;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:Sora,sans-serif;font-size:13px">
+        <button onclick="sendCaregiverQuestion()" style="padding:8px 16px;background:var(--accent);border:none;border-radius:8px;color:#fff;font-family:Sora,sans-serif;font-size:13px;cursor:pointer">Ask</button>
+      </div>
+    </div>
+    <div id="caregiverResult" style="margin-top:20px"></div>
+  </div>`;
+}
+
+async function sendCaregiverPrompt(el){
+  const prompt = el.getAttribute("data-prompt");
+  document.getElementById("caregiverResult").innerHTML = "<div style='color:var(--text2);font-size:13px'>Generating guidance...</div>";
+  if(!currentSessionId) await createNewSession();
+  try {
+    const res = await fetch("/sessions/"+currentSessionId+"/messages",{method:"POST",headers:authHeaders(),body:JSON.stringify({message:prompt})});
+    const data = await res.json();
+    document.getElementById("caregiverResult").innerHTML = `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:20px"><div style="font-size:13px;line-height:1.7">${marked.parse(data.reply||"")}</div></div>`;
+  } catch(e) {
+    document.getElementById("caregiverResult").innerHTML = "<div style='color:var(--danger)'>Error: "+e.message+"</div>";
+  }
+}
+
+async function sendCaregiverQuestion(){
+  const q = document.getElementById("caregiverQ").value.trim();
+  if(!q) return;
+  document.getElementById("caregiverResult").innerHTML = "<div style='color:var(--text2);font-size:13px'>Generating guidance...</div>";
+  if(!currentSessionId) await createNewSession();
+  try {
+    const res = await fetch("/sessions/"+currentSessionId+"/messages",{method:"POST",headers:authHeaders(),body:JSON.stringify({message:q})});
+    const data = await res.json();
+    document.getElementById("caregiverResult").innerHTML = `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:20px"><div style="font-size:13px;line-height:1.7">${marked.parse(data.reply||"")}</div></div>`;
+  } catch(e) {
+    document.getElementById("caregiverResult").innerHTML = "<div style='color:var(--danger)'>Error: "+e.message+"</div>";
+  }
+}
+
+function openSymptomChecker(){
+  const chat = document.getElementById("chat");
+  chat.innerHTML = `
+  <div style="padding:24px;max-width:700px;margin:0 auto">
+    <h2 style="font-size:18px;font-weight:600;margin-bottom:4px">Symptom Checker</h2>
+    <p style="color:var(--text2);font-size:13px;margin-bottom:20px">Describe patient symptoms to get AI-assisted staging and recommendations</p>
+    <div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:20px">
+      <div class="auth-field" style="margin-bottom:12px">
+        <label style="font-size:11px;color:var(--text2);display:block;margin-bottom:6px">PATIENT AGE</label>
+        <input id="scAge" type="number" placeholder="e.g. 72" style="width:120px;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:Sora,sans-serif;font-size:13px">
+      </div>
+      <div style="margin-bottom:12px">
+        <label style="font-size:11px;color:var(--text2);display:block;margin-bottom:6px">OBSERVED SYMPTOMS</label>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+          ${["Memory loss","Word-finding difficulty","Disorientation","Personality changes","Difficulty with daily tasks","Repetitive questions","Getting lost","Sleep disturbances","Agitation","Withdrawal"].map(s=>`
+            <label style="display:flex;align-items:center;gap:6px;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:12px;color:var(--text2)">
+              <input type="checkbox" value="${s}" class="symptom-cb" style="cursor:pointer"> ${s}
+            </label>
+          `).join("")}
+        </div>
+      </div>
+      <div style="margin-bottom:12px">
+        <label style="font-size:11px;color:var(--text2);display:block;margin-bottom:6px">ADDITIONAL NOTES</label>
+        <textarea id="scNotes" placeholder="Describe any other observations..." rows="3" style="width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:Sora,sans-serif;font-size:13px;resize:none"></textarea>
+      </div>
+      <button onclick="analyzeSymptoms()" style="padding:10px 20px;background:var(--accent);border:none;border-radius:8px;color:#fff;font-family:Sora,sans-serif;font-size:13px;cursor:pointer;font-weight:500">🔍 Analyze Symptoms</button>
+    </div>
+    <div id="symptomResult" style="display:none"></div>
+  </div>`;
+}
+
+async function analyzeSymptoms(){
+  const age = document.getElementById("scAge").value;
+  const checked = [...document.querySelectorAll(".symptom-cb:checked")].map(c=>c.value);
+  const notes = document.getElementById("scNotes").value;
+
+  if(checked.length === 0){
+    alert("Please select at least one symptom");
+    return;
+  }
+
+  const resultDiv = document.getElementById("symptomResult");
+  resultDiv.style.display = "block";
+  resultDiv.innerHTML = "<div style='color:var(--text2);font-size:13px'>Analyzing symptoms...</div>";
+
+  const prompt = "Patient age: " + (age||"unknown") + ". Observed symptoms: " + checked.join(", ") + ". Additional notes: " + (notes||"none") + ". Based on these symptoms, what Alzheimer stage might this patient be in? What diagnostic tests do you recommend? What are the next clinical steps?";
+
+  if(!currentSessionId) await createNewSession();
+
+  try {
+    const res = await fetch("/sessions/"+currentSessionId+"/messages", {
+      method:"POST",
+      headers: authHeaders(),
+      body: JSON.stringify({message: prompt})
+    });
+    const data = await res.json();
+    const reply = data.reply || "No response";
+    resultDiv.innerHTML = `
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:20px">
+        <div style="font-size:12px;color:var(--text2);margin-bottom:12px;font-family:'IBM Plex Mono',monospace">AI ANALYSIS</div>
+        <div style="font-size:13px;line-height:1.7;color:var(--text)">${marked.parse(reply)}</div>
+        <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border);font-size:11px;color:var(--text2)">⚠️ This is AI-assisted analysis only. Always apply your own clinical judgment.</div>
+      </div>`;
+  } catch(e) {
+    resultDiv.innerHTML = "<div style='color:var(--danger);font-size:13px'>Error: " + e.message + "</div>";
+  }
+}
+
 function openMedications(){
   const chat = document.getElementById("chat");
   chat.innerHTML = `
